@@ -1,0 +1,111 @@
+{
+  "recitalistTickets": [
+    {
+      "id": 1,
+      "name": "Emma Johnson",
+      "ticketId": "REC2025001",
+      "performance": "Piano Solo - Chopin Nocturne",
+      "seat": "A1",
+      "qrGenerated": false,
+      "qrGeneratedAt": null
+    },
+    {
+      "id": 2,
+      "name": "Michael Chen",
+      "ticketId": "REC2025002",
+      "performance": "Violin Solo - Bach Partita",
+      "seat": "A2",
+      "qrGenerated": true,
+      "qrGeneratedAt": "2025-06-14T10:30:00Z"
+    },
+    {
+      "id": 3,
+      "name": "Sarah Williams",
+      "ticketId": "REC2025003",
+      "performance": "Voice - Ave Maria",
+      "seat": "A3",
+      "qrGenerated": false,
+      "qrGeneratedAt": null
+    },
+    {
+      "id": 4,
+      "name": "David Rodriguez",
+      "ticketId": "REC2025004",
+      "performance": "Guitar Classical - Spanish Romance",
+      "seat": "A4",
+      "qrGenerated": false,
+      "qrGeneratedAt": null
+    },
+    {
+      "id": 5,
+      "name": "Lisa Thompson",
+      "ticketId": "REC2025005",
+      "performance": "Flute Solo - Mozart Concerto",
+      "seat": "A5",
+      "qrGenerated": true,
+      "qrGeneratedAt": "2025-06-14T09:15:00Z"
+    }
+  ],
+  "guestTickets": [
+    {
+      "id": 6,
+      "guestName": "Robert Johnson",
+      "ticketId": "GST2025001",
+      "recitalistName": "Emma Johnson",
+      "seat": "B1",
+      "relationship": "Father",
+      "qrGenerated": true,
+      "qrGeneratedAt": "2025-06-14T11:00:00Z"
+    },
+    {
+      "id": 7,
+      "guestName": "Mary Johnson",
+      "ticketId": "GST2025002",
+      "recitalistName": "Emma Johnson",
+      "seat": "B2",
+      "relationship": "Mother",
+      "qrGenerated": false,
+      "qrGeneratedAt": null
+    },
+    {
+      "id": 8,
+      "guestName": "Lisa Chen",
+      "ticketId": "GST2025003",
+      "recitalistName": "Michael Chen",
+      "seat": "B3",
+      "relationship": "Sister",
+      "qrGenerated": false,
+      "qrGeneratedAt": null
+    },
+    {
+      "id": 9,
+      "guestName": "Alex Williams",
+      "ticketId": "GST2025004",
+      "recitalistName": "Sarah Williams",
+      "seat": "B4",
+      "relationship": "Friend",
+      "qrGenerated": false,
+      "qrGeneratedAt": null
+    },
+    {
+      "id": 10,
+      "guestName": "Maria Rodriguez",
+      "ticketId": "GST2025005",
+      "recitalistName": "David Rodriguez",
+      "seat": "B5",
+      "relationship": "Mother",
+      "qrGenerated": false,
+      "qrGeneratedAt": null
+    },
+    {
+      "id": 11,
+      "guestName": "James Thompson",
+      "ticketId": "GST2025006",
+      "recitalistName": "Lisa Thompson",
+      "seat": "B6",
+      "relationship": "Father",
+      "qrGenerated": true,
+      "qrGeneratedAt": "2025-06-14T08:45:00Z"
+    }
+  ]
+}
