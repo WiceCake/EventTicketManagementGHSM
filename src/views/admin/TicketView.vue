@@ -545,6 +545,17 @@ function showToast(message, success = true) {
 function showMessage(msg, type = 'success') {
   toast(msg, { type })
 }
+
+function downloadCSVTemplate() {
+  const csvContent = 'recitalist_name,guest_count\nJohn Doe,2\nJane Smith,1';
+  const blob = new Blob([csvContent], { type: 'text/csv' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'recitalists_template.csv';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
 </script>
 
 <template>
@@ -732,6 +743,13 @@ function showMessage(msg, type = 'success') {
           <form v-else class="p-6 space-y-4">
             <div>
               <label class="block text-sm font-medium text-gray-300 mb-1">CSV File</label>
+              <button
+                type="button"
+                @click="downloadCSVTemplate"
+                class="mb-3 px-3 py-1 bg-blue-700 text-white text-xs rounded hover:bg-blue-800 transition"
+              >
+                Download CSV Template
+              </button>
               <input type="file" accept=".csv" @change="handleCSVUpload" class="w-full text-white" />
               <p class="text-xs text-gray-400 mt-2">Format: <code>recitalist_name,guest_count</code> (one per line)</p>
             </div>

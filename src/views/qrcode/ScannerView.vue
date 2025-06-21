@@ -256,14 +256,14 @@ function onManualCodeInput(e) {
               </button>
             </div>
             <!-- Camera Container -->
-            <div class="relative bg-[#181f2a] rounded-xl overflow-hidden mb-2 border border-blue-900">
+            <div class="relative bg-[#181f2a] rounded-xl overflow-hidden mb-2 border border-blue-900 flex items-center justify-center" style="min-height:340px; height:340px;">
               <QrcodeStream
                 v-if="isCameraActive"
                 @detect="onDetect"
                 :paused="processing"
-                class="aspect-video"
+                class="w-full h-full max-w-[480px] max-h-[340px] aspect-video"
               />
-              <div v-else class="aspect-video flex items-center justify-center text-gray-500">
+              <div v-else class="w-full h-full aspect-video flex items-center justify-center text-gray-500" style="min-height:340px; height:340px;">
                 <div class="text-center">
                   <CameraIcon class="w-16 h-16 mx-auto mb-4 text-gray-400" />
                   <p class="text-lg font-medium text-gray-300">Camera Inactive</p>
