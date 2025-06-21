@@ -178,15 +178,15 @@ onMounted(fetchEvents)
                 <div>
                   <div class="text-lg font-bold text-blue-400 flex items-center gap-2">
                     {{ event.event_name }}
-                    <span
-                      v-if="event.is_active"
-                      class="ml-2 px-2 py-0.5 rounded-full bg-green-600 text-xs text-white font-semibold"
-                      title="Active Event"
-                    >Active</span>
                   </div>
                   <div class="text-sm text-gray-400">{{ formatDate(event.event_date) }}</div>
                 </div>
-                <div class="flex gap-2">
+                <div class="flex items-center gap-2 min-w-[110px] justify-end">
+                  <span
+                    v-if="event.is_active"
+                    class="px-2 py-0.5 rounded-full bg-green-600 text-xs text-white font-semibold"
+                    title="Active Event"
+                  >Active</span>
                   <button
                     v-if="!event.is_active"
                     @click="setActiveEvent(event.id)"
