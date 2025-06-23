@@ -4,9 +4,11 @@ import { Squares2X2Icon } from "@heroicons/vue/24/solid";
 import { useRoute } from "vue-router";
 import SideBar from "./components/SideBar.vue";
 import { useAuth } from './composables/useAuth'
+import { useTheme } from './composables/useTheme'
 
 const route = useRoute();
 const { user, loading, isAuthenticated, error } = useAuth()
+const { themeClasses, initTheme } = useTheme()
 
 // Sidebar state management
 const sidebarCollapsed = ref(false);
@@ -50,15 +52,19 @@ watch(route, (newRoute) => {
 onMounted(() => {
   checkScreenSize();
   window.addEventListener("resize", checkScreenSize);
-});
-
-onUnmounted(() => {
-  window.removeEventListener("resize", checkScreenSize);
+  // Initialize theme system
+  const cleanupTheme = initTheme();
+  
+  // Store cleanup function for unmount
+  onUnmounted(() => {
+    window.removeEventListener("resize", checkScreenSize);
+    cleanupTheme?.();
+  });
 });
 </script>
 
 <template>
-  <div class="app-container min-h-screen bg-gray-100">
+  <div :class="['app-container min-h-screen', themeClasses.pageBackground]">
     <!-- Fixed Sidebar -->
     <aside v-show="showSidebar">
       <SideBar @toggleSidebar="toggleSidebar" />
@@ -88,12 +94,18 @@ onUnmounted(() => {
       <!-- Mobile Header - only show when sidebar is enabled -->
       <header
         v-if="showSidebar"
-        class="md:hidden bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between"
+        :class="[
+          'md:hidden border-b px-4 py-3 flex items-center justify-between',
+          themeClasses.sidebarBackground
+        ]"
       >
-        <h1 class="text-lg font-semibold text-gray-900">GHSM</h1>
+        <h1 :class="['text-lg font-semibold', themeClasses.textPrimary]">GHSM</h1>
         <button
           @click="toggleSidebar"
-          class="p-2 rounded-md text-gray-600 hover:bg-gray-100 transition-colors duration-200"
+          :class="[
+            'p-2 rounded-md transition-colors duration-200',
+            themeClasses.navItem
+          ]"
         >
           <!-- Hamburger Menu Icon -->
           <svg
@@ -113,19 +125,15 @@ onUnmounted(() => {
       </header>
 
       <!-- Show loading state -->
-      <div v-if="loading" class="loading">
+      <div v-if="loading" :class="['loading', themeClasses.textPrimary]">
         Initializing authentication...
       </div>
-      <div v-else-if="error" style="color:red;">Auth error: {{ error.message }}</div>
+      <div v-else-if="error" :class="['text-red-500']">Auth error: {{ error.message }}</div>
       
       <!-- Router View -->
       <div
         v-else
         class="min-h-screen"
-        :class="{
-          'bg-gray-50': showSidebar,
-          'bg-white': !showSidebar
-        }"
       >
         <RouterView />
       </div>

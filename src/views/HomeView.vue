@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { supabase } from '../lib/supabase'
+import { useTheme } from '../composables/useTheme'
 import {
   UsersIcon,
   TicketIcon,
@@ -13,6 +14,8 @@ import {
   MusicalNoteIcon,
   UserGroupIcon
 } from '@heroicons/vue/24/outline'
+
+const { themeClasses } = useTheme()
 
 const stats = ref({
   total: 0,
@@ -29,32 +32,49 @@ const stats = ref({
 const recentLogs = ref([])
 
 async function fetchStats() {
-  // Get event info (assuming only one active event)
+  // Get event info (only active and unfinished events)
   const { data: event } = await supabase
     .from('event_config')
     .select('*')
     .eq('is_active', true)
+    .eq('is_finished', false)
     .maybeSingle()
   stats.value.event = event || {}
 
-  // Get ticket stats
-  const { data: ticketStats } = await supabase
-    .from('ticket_stats')
-    .select('*')
-    .maybeSingle()
-  if (ticketStats) {
+  // Only fetch ticket stats if there's an active event
+  if (event) {
+    const { data: ticketStats } = await supabase
+      .from('ticket_stats')
+      .select('*')
+      .maybeSingle()
+    if (ticketStats) {
+      stats.value = {
+        ...stats.value,
+        total: ticketStats.total_tickets,
+        unclaimed: ticketStats.unclaimed_tickets,
+        claimed: ticketStats.claimed_tickets,
+        scanned: ticketStats.scanned_tickets,
+        recitalist: ticketStats.recitalist_tickets,
+        guest: ticketStats.guest_tickets,
+        distributed: ticketStats.tickets_distributed,
+        remaining: ticketStats.remaining_tickets,
+        max: ticketStats.max_tickets,
+        event: event,
+      }
+    }
+  } else {
+    // Reset stats if no active event
     stats.value = {
-      ...stats.value,
-      total: ticketStats.total_tickets,
-      unclaimed: ticketStats.unclaimed_tickets,
-      claimed: ticketStats.claimed_tickets,
-      scanned: ticketStats.scanned_tickets,
-      recitalist: ticketStats.recitalist_tickets,
-      guest: ticketStats.guest_tickets,
-      distributed: ticketStats.tickets_distributed,
-      remaining: ticketStats.remaining_tickets,
-      max: ticketStats.max_tickets,
-      event: event || {},
+      total: 0,
+      unclaimed: 0,
+      claimed: 0,
+      scanned: 0,
+      recitalist: 0,
+      guest: 0,
+      distributed: 0,
+      remaining: 0,
+      max: 0,
+      event: {},
     }
   }
 }
@@ -75,65 +95,62 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="event-bg min-h-screen py-10 px-2">
+  <div :class="['min-h-screen py-10 px-2', themeClasses.pageBackground]">
     <div class="max-w-4xl mx-auto">
       <!-- Dashboard Header -->
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-gray-700 mb-8">
+      <div :class="['flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b mb-8', themeClasses.cardBorder]">
         <div>
-          <h1 class="text-3xl font-bold text-white mb-2 tracking-tight">Dashboard</h1>
-          <p class="text-gray-400 text-lg">
+          <h1 :class="['text-3xl font-bold mb-2 tracking-tight', themeClasses.textPrimary]">Dashboard</h1>
+          <p :class="['text-lg', themeClasses.textSecondary]">
             {{ stats.event.event_name || 'Event' }}
             <span v-if="stats.event.event_date"> — {{ new Date(stats.event.event_date).toLocaleDateString() }}</span>
             <span v-if="stats.event.venue_name"> | {{ stats.event.venue_name }}</span>
           </p>
         </div>
-      </div>
-      <!-- Stats Overview -->
+      </div>      <!-- Stats Overview -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-        <div class="bg-[#181f2a] rounded-2xl shadow border-2 border-blue-700 p-6 flex flex-col items-center">
-          <div class="text-blue-400 text-3xl font-bold">{{ stats.total }}</div>
-          <div class="text-blue-200 mt-2 font-semibold">Total Tickets</div>
+        <div :class="['rounded-xl shadow-lg border p-6 flex flex-col items-center transition-all duration-200 hover:shadow-xl', themeClasses.cardBackground, themeClasses.cardBorder]">
+          <div class="text-blue-500 text-3xl font-bold">{{ stats.total }}</div>
+          <div :class="['mt-2 font-semibold', themeClasses.textSecondary]">Total Tickets</div>
         </div>
-        <div class="bg-[#181f2a] rounded-2xl shadow border-2 border-yellow-700 p-6 flex flex-col items-center">
-          <div class="text-yellow-400 text-3xl font-bold">{{ stats.claimed }}</div>
-          <div class="text-yellow-200 mt-2 font-semibold">Claimed</div>
+        <div :class="['rounded-xl shadow-lg border p-6 flex flex-col items-center transition-all duration-200 hover:shadow-xl', themeClasses.cardBackground, themeClasses.cardBorder]">
+          <div class="text-yellow-500 text-3xl font-bold">{{ stats.claimed }}</div>
+          <div :class="['mt-2 font-semibold', themeClasses.textSecondary]">Claimed</div>
         </div>
-        <div class="bg-[#181f2a] rounded-2xl shadow border-2 border-green-700 p-6 flex flex-col items-center">
-          <div class="text-green-400 text-3xl font-bold">{{ stats.scanned }}</div>
-          <div class="text-green-200 mt-2 font-semibold">Scanned</div>
+        <div :class="['rounded-xl shadow-lg border p-6 flex flex-col items-center transition-all duration-200 hover:shadow-xl', themeClasses.cardBackground, themeClasses.cardBorder]">
+          <div class="text-green-500 text-3xl font-bold">{{ stats.scanned }}</div>
+          <div :class="['mt-2 font-semibold', themeClasses.textSecondary]">Scanned</div>
         </div>
-        <div class="bg-[#181f2a] rounded-2xl shadow border-2 border-gray-700 p-6 flex flex-col items-center">
-          <div class="text-gray-300 text-3xl font-bold">{{ stats.unclaimed }}</div>
-          <div class="text-gray-300 mt-2 font-semibold">Unclaimed</div>
-        </div>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-        <div class="bg-[#181f2a] rounded-2xl shadow border-2 border-purple-700 p-6 flex flex-col items-center">
-          <div class="text-purple-400 text-3xl font-bold">{{ stats.recitalist }}</div>
-          <div class="text-purple-200 mt-2 font-semibold">Recitalist Tickets</div>
-        </div>
-        <div class="bg-[#181f2a] rounded-2xl shadow border-2 border-pink-700 p-6 flex flex-col items-center">
-          <div class="text-pink-400 text-3xl font-bold">{{ stats.guest }}</div>
-          <div class="text-pink-200 mt-2 font-semibold">Guest Tickets</div>
+        <div :class="['rounded-xl shadow-lg border p-6 flex flex-col items-center transition-all duration-200 hover:shadow-xl', themeClasses.cardBackground, themeClasses.cardBorder]">
+          <div :class="['text-3xl font-bold', themeClasses.textMuted]">{{ stats.unclaimed }}</div>
+          <div :class="['mt-2 font-semibold', themeClasses.textMuted]">Unclaimed</div>
         </div>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-        <div class="bg-[#181f2a] rounded-2xl shadow border-2 border-blue-700 p-6 flex flex-col items-center">
-          <div class="text-blue-400 text-3xl font-bold">{{ stats.distributed }}</div>
-          <div class="text-blue-200 mt-2 font-semibold">Distributed</div>
+        <div :class="['rounded-xl shadow-lg border p-6 flex flex-col items-center transition-all duration-200 hover:shadow-xl', themeClasses.cardBackground, themeClasses.cardBorder]">
+          <div class="text-purple-500 text-3xl font-bold">{{ stats.recitalist }}</div>
+          <div :class="['mt-2 font-semibold', themeClasses.textSecondary]">Recitalist Tickets</div>
         </div>
-        <div class="bg-[#181f2a] rounded-2xl shadow border-2 border-green-700 p-6 flex flex-col items-center">
-          <div class="text-green-400 text-3xl font-bold">{{ stats.remaining }}</div>
-          <div class="text-green-200 mt-2 font-semibold">Remaining</div>
+        <div :class="['rounded-xl shadow-lg border p-6 flex flex-col items-center transition-all duration-200 hover:shadow-xl', themeClasses.cardBackground, themeClasses.cardBorder]">
+          <div class="text-pink-500 text-3xl font-bold">{{ stats.guest }}</div>
+          <div :class="['mt-2 font-semibold', themeClasses.textSecondary]">Guest Tickets</div>
         </div>
       </div>
-      <!-- Recent Activity Logs -->
-      <div class="bg-[#232b3b] rounded-2xl shadow-2xl border border-blue-700 p-8">
-        <h2 class="text-2xl font-bold text-white mb-5">Recent Activity</h2>
-        <div class="overflow-x-auto rounded-lg">
-          <table class="min-w-full bg-[#181f2a] rounded-lg">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+        <div :class="['rounded-xl shadow-lg border p-6 flex flex-col items-center transition-all duration-200 hover:shadow-xl', themeClasses.cardBackground, themeClasses.cardBorder]">
+          <div class="text-blue-500 text-3xl font-bold">{{ stats.distributed }}</div>
+          <div :class="['mt-2 font-semibold', themeClasses.textSecondary]">Distributed</div>
+        </div>
+        <div :class="['rounded-xl shadow-lg border p-6 flex flex-col items-center transition-all duration-200 hover:shadow-xl', themeClasses.cardBackground, themeClasses.cardBorder]">
+          <div class="text-green-500 text-3xl font-bold">{{ stats.remaining }}</div>
+          <div :class="['mt-2 font-semibold', themeClasses.textSecondary]">Remaining</div>
+        </div>
+      </div>      <!-- Recent Activity Logs -->
+      <div :class="['rounded-xl shadow-lg border p-8', themeClasses.cardBackground, themeClasses.cardBorder]">
+        <h2 :class="['text-2xl font-bold mb-5', themeClasses.textPrimary]">Recent Activity</h2>        <div class="overflow-x-auto rounded-lg">
+          <table :class="['min-w-full rounded-lg', themeClasses.cardBackground]">
             <thead>
-              <tr class="text-left text-gray-400 text-sm border-b border-blue-700">
+              <tr :class="['text-left text-sm border-b', themeClasses.textSecondary, themeClasses.cardBorder]">
                 <th class="py-3 px-4">Timestamp</th>
                 <th class="py-3 px-4">Action</th>
                 <th class="py-3 px-4">Ticket</th>
@@ -142,51 +159,42 @@ onMounted(() => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="log in recentLogs" :key="log.id" class="border-b border-blue-900 hover:bg-[#232b3b] transition">
-                <td class="py-2 px-4 text-gray-300">{{ new Date(log.created_at).toLocaleString() }}</td>
-                <td class="py-2 px-4">
+              <tr v-for="log in recentLogs" :key="log.id" :class="['border-b transition', themeClasses.tableRow, themeClasses.cardBorder]">
+                <td :class="['py-2 px-4', themeClasses.textSecondary]">{{ new Date(log.created_at).toLocaleString() }}</td>                <td class="py-2 px-4">
                   <span
                     :class="[
                       'inline-block px-3 py-1 rounded-full text-xs font-semibold',
                       log.action === 'checkin' || log.action === 'scanned'
-                        ? 'bg-green-100 text-green-800'
+                        ? themeClasses.statusSuccess
                         : log.action === 'invalid'
-                        ? 'bg-red-100 text-red-800'
+                        ? themeClasses.statusError
                         : log.action === 'claimed'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-blue-100 text-blue-800'
+                        ? themeClasses.statusWarning
+                        : themeClasses.statusInfo
                     ]"
                   >
                     {{ log.action.charAt(0).toUpperCase() + log.action.slice(1) }}
                   </span>
                 </td>
-                <td class="py-2 px-4 text-gray-200">
+                <td :class="['py-2 px-4', themeClasses.textPrimary]">
                   {{ log.tickets?.name || log.ticket_id }}
                 </td>
-                <td class="py-2 px-4 text-gray-200">
+                <td :class="['py-2 px-4', themeClasses.textPrimary]">
                   {{ log.users?.full_name || log.users?.email || '—' }}
                 </td>
-                <td class="py-2 px-4 text-gray-400">{{ log.notes }}</td>
+                <td :class="['py-2 px-4', themeClasses.textMuted]">{{ log.notes }}</td>
               </tr>
               <tr v-if="recentLogs.length === 0">
-                <td colspan="5" class="text-center py-8 text-gray-500">
+                <td :class="['text-center py-8', themeClasses.textMuted]" colspan="5">
                   <div class="flex flex-col items-center">
-                    <QrCodeIcon class="w-12 h-12 mb-2 text-gray-400" />
+                    <QrCodeIcon :class="['w-12 h-12 mb-2', themeClasses.textMuted]" />
                     <span>No recent activity</span>
                   </div>
                 </td>
-              </tr>
-            </tbody>
+              </tr>            </tbody>
           </table>
         </div>
       </div>
     </div>
   </div>
 </template>
-
-<style scoped>
-.event-bg {
-  background: linear-gradient(135deg, #181f2a 0%, #232b3b 100%);
-  min-height: 100vh;
-}
-</style>

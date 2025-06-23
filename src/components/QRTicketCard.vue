@@ -4,6 +4,9 @@ import QRCode from 'qrcode'
 import html2canvas from 'html2canvas-pro'
 import jsPDF from 'jspdf'
 import { supabase } from '../lib/supabase'
+import { useTheme } from '../composables/useTheme'
+
+const { themeClasses } = useTheme()
 
 const props = defineProps({
   ticket: Object,
@@ -45,7 +48,10 @@ function drawQR(size = 150) {
     QRCode.toCanvas(qrCanvas.value, JSON.stringify({ id: props.ticket.id }), {
       width: size,
       margin: 1,
-      color: { dark: '#fff', light: '#232b3b' }
+      color: { 
+        dark: themeClasses.value.background.includes('dark') ? '#fff' : '#000',
+        light: themeClasses.value.background.includes('dark') ? '#232b3b' : '#ffffff'
+      }
     })
     // Always keep CSS size at 160px
     qrCanvas.value.style.width = '160px'
@@ -214,21 +220,21 @@ function cancelClaim() {
     <div
       ref="cardRef"
       :id="`card-${ticket.id}`"
-      class="max-w-xs w-full rounded-xl shadow-lg flex flex-col items-center p-4 border border-blue-400 bg-slate-800"
+      :class="[themeClasses.card, 'max-w-xs w-full rounded-xl shadow-lg flex flex-col items-center p-4 border']"
     >
-      <div class="font-bold mb-2 tracking-wide text-slate-100">SCAN ME</div>
+      <div :class="[themeClasses.text, 'font-bold mb-2 tracking-wide']">SCAN ME</div>
       <div class="w-40 h-40 flex justify-center items-center mb-2">
         <canvas ref="qrCanvas" class="w-40 h-40" />
       </div>
       <div class="text-center mb-2">
-        <div class="font-semibold text-sm text-slate-300">{{ ticketTypeLabel }}</div>
-        <div class="text-lg font-bold text-white">{{ ticketName }}</div>
-        <div class="text-xs break-all text-slate-400">ID: {{ ticket.id }}</div>
-        <div v-if="ticket.manual_code" class="text-xs font-mono text-blue-300 mt-1">Manual Code: <span class="font-bold">{{ ticket.manual_code }}</span></div>
+        <div :class="[themeClasses.muted, 'font-semibold text-sm']">{{ ticketTypeLabel }}</div>
+        <div :class="[themeClasses.text, 'text-lg font-bold']">{{ ticketName }}</div>
+        <div :class="[themeClasses.muted, 'text-xs break-all']">ID: {{ ticket.id }}</div>
+        <div v-if="ticket.manual_code" class="text-xs font-mono text-blue-400 mt-1">Manual Code: <span class="font-bold">{{ ticket.manual_code }}</span></div>
       </div>
 
       <div ref="actionsRef" class="flex flex-col gap-2 w-full mt-2">
-        <button @click="handleSingleDownload" class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-1 text-sm font-medium w-full">
+        <button @click="handleSingleDownload" class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-1 text-sm font-medium w-full transition-colors">
           Download as Image
         </button>
         <!--
@@ -238,14 +244,14 @@ function cancelClaim() {
     </div>
 
     <div v-if="showClaimerPrompt" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-      <div class="bg-[#232b3b] rounded-xl max-w-md w-full shadow-2xl border border-blue-700 relative" @click.stop>
+      <div :class="[themeClasses.card, 'rounded-xl max-w-md w-full shadow-2xl border relative']" @click.stop>
         <div class="p-6">
-          <h3 class="text-lg font-semibold text-white mb-4">Claim Ticket</h3>
-          <label class="block text-sm font-medium text-gray-300 mb-1">Claimer Name</label>
-          <input v-model="claimerName" class="w-full px-3 py-2 border border-gray-700 rounded bg-[#181f2a] text-white mb-4" />
+          <h3 :class="[themeClasses.text, 'text-lg font-semibold mb-4']">Claim Ticket</h3>
+          <label :class="[themeClasses.muted, 'block text-sm font-medium mb-1']">Claimer Name</label>
+          <input v-model="claimerName" :class="[themeClasses.input, 'w-full px-3 py-2 rounded mb-4']" />
           <div class="flex justify-end gap-2">
-            <button @click="cancelClaim" class="px-4 py-2 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition">Cancel</button>
-            <button @click="confirmClaim" :disabled="!claimerName.trim()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition">Confirm</button>
+            <button @click="cancelClaim" :class="[themeClasses.buttonSecondary, 'px-4 py-2 rounded transition-colors']">Cancel</button>
+            <button @click="confirmClaim" :disabled="!claimerName.trim()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Confirm</button>
           </div>
         </div>
       </div>

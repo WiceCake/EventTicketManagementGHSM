@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { supabase } from '../../lib/supabase'
+import { useTheme } from '../../composables/useTheme'
 import QRCode from 'qrcode'
 import QRTicketCard from '../../components/QRTicketCard.vue'
 import {
@@ -93,10 +94,11 @@ async function fetchActiveEvent() {
     .from('event_config')
     .select('*')
     .eq('is_active', true)
+    .eq('is_finished', false)
     .maybeSingle() // <-- Use maybeSingle instead of single
 
   if (err || !data) {
-    error.value = 'No active event set. Please set an active event first.'
+    error.value = 'No active, unfinished event set. Please set an active event first.'
     activeEvent.value = null
   } else {
     activeEvent.value = data
@@ -556,78 +558,119 @@ function downloadCSVTemplate() {
   link.click();
   document.body.removeChild(link);
 }
+
+const { themeClasses } = useTheme()
 </script>
 
-<template>
-  <div class="event-bg min-h-screen py-10 px-2">
-    <div v-if="toast.show" :class="['fixed top-6 left-1/2 z-50 px-6 py-3 rounded-lg shadow-lg text-base font-semibold transition-all', toast.success ? 'bg-green-600 text-white' : 'bg-red-600 text-white']" style="transform: translateX(-50%); min-width: 220px;">
+<template>  <div :class="[themeClasses.pageBackground, 'min-h-screen py-8 px-4']">
+    <!-- Toast Notification -->
+    <div 
+      v-if="toast.show" 
+      :class="[
+        'fixed top-6 left-1/2 z-50 px-6 py-3 rounded-lg shadow-lg text-sm font-semibold transition-all transform -translate-x-1/2',
+        toast.success ? themeClasses.toastSuccess : themeClasses.toastError
+      ]"
+    >
       {{ toast.message }}
     </div>
-    <div class="max-w-5xl mx-auto">
-      <!-- Add Recitalist & Batch Upload Buttons -->
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-2">
-        <div class="flex gap-2">
+    
+    <div class="max-w-6xl mx-auto space-y-8">
+      <!-- Header with controls -->
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+        <div>
+          <h1 :class="[themeClasses.textPrimary, 'text-3xl font-bold tracking-tight']">Ticket Management</h1>
+          <p :class="[themeClasses.textMuted, 'mt-2 text-lg']">Manage tickets for the current active event</p>
+        </div>
+        
+        <div class="flex flex-col sm:flex-row gap-3">
           <button
             @click="openAddModal"
             :disabled="!activeEvent"
-            class="inline-flex items-center px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg shadow hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50"
+            :class="[
+              'inline-flex items-center px-6 py-3 rounded-lg font-semibold shadow-lg transition-all duration-200 hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50',
+              themeClasses.buttonPrimary
+            ]"
           >
-            + Add Recitalist
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Add Recitalist
           </button>
           <button
             @click="openBatchModal"
             :disabled="!activeEvent"
-            class="inline-flex items-center px-5 py-2 bg-purple-600 text-white text-sm font-semibold rounded-lg shadow hover:bg-purple-700 transition-colors duration-200 disabled:opacity-50"
+            :class="[
+              'inline-flex items-center px-6 py-3 rounded-lg font-semibold shadow-lg transition-all duration-200 hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50',
+              themeClasses.buttonSecondary
+            ]"
           >
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
             Batch Upload CSV
           </button>
         </div>
-        <!-- Search Bar -->
-        <div class="flex items-center gap-2 mt-2 sm:mt-0">
+      </div>
+
+      <!-- Active Event Info -->
+      <div v-if="activeEvent" :class="[themeClasses.card, themeClasses.cardBorder, 'p-6 rounded-xl border shadow-lg']">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 :class="[themeClasses.textPrimary, 'text-xl font-semibold']">{{ activeEvent.event_name }}</h2>
+            <p :class="[themeClasses.textMuted, 'mt-1']">{{ formatDate(activeEvent.event_date) }} • {{ activeEvent.venue_name }}</p>
+          </div>
+          <div v-if="activeEvent" class="mt-4 lg:mt-0 flex items-center gap-4">
+            <div :class="[themeClasses.badgeSuccess, 'px-3 py-1 rounded-full text-sm font-medium']">
+              {{ ticketsLeft }} tickets available
+            </div>
+            <div :class="[themeClasses.textMuted, 'text-sm']">
+              {{ tickets.length }} / {{ activeEvent.max_tickets }} used
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- No Active Event -->
+      <div v-else :class="[themeClasses.card, themeClasses.cardBorder, 'p-6 rounded-xl border shadow-lg text-center']">
+        <svg :class="[themeClasses.textMuted, 'w-12 h-12 mx-auto mb-3 opacity-50']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 18.5c-.77.833.192 2.5 1.732 2.5z" />
+        </svg>
+        <h3 :class="[themeClasses.textPrimary, 'text-lg font-semibold mb-2']">No Active Event</h3>
+        <p :class="[themeClasses.textMuted, 'text-sm']">Please set an event as active before managing tickets.</p>
+      </div>
+
+      <!-- Search Bar -->
+      <div v-if="activeEvent" class="flex justify-between items-center">
+        <h2 :class="[themeClasses.textPrimary, 'text-2xl font-semibold']">All Tickets</h2>
+        <div class="flex items-center gap-3">
           <input
             v-model="searchQuery"
             type="text"
             placeholder="Search recitalist..."
-            class="px-3 py-2 rounded-lg border border-gray-600 bg-[#181f2a] text-white focus:ring focus:ring-blue-400/30"
+            :class="[
+              themeClasses.input, 
+              'px-4 py-2 rounded-lg text-sm w-64 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all'
+            ]"
           />
         </div>
       </div>
-
-      <!-- Active Event Banner -->
-      <div v-if="activeEvent" class="mb-8">
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-gradient-to-r from-blue-900/80 to-blue-700/60 border border-blue-500 rounded-2xl shadow-lg p-6 mb-2">
-          <div>
-            <span class="text-white font-bold text-lg">Active Event:</span>
-            <span class="text-blue-300 font-extrabold text-xl ml-2">{{ activeEvent.event_name }}</span>
-            <span class="text-gray-300 ml-3 text-base">{{ formatDate(activeEvent.event_date) }}</span>
-          </div>
-          <div class="text-base text-blue-200 font-medium mt-2 sm:mt-0">Venue: {{ activeEvent.venue_name }}</div>
-        </div>
-        <div class="flex flex-wrap items-center gap-4 mt-4">
-          <div class="flex items-center bg-[#181f2a] border border-green-700 rounded-lg px-4 py-2 shadow">
-            <span class="text-green-400 font-bold text-base mr-2">Tickets Left</span>
-            <span class="text-green-200 font-mono text-xl">{{ ticketsLeft }}</span>
-            <span v-if="activeEvent" class="ml-2 text-gray-400 text-base">/ {{ activeEvent.max_tickets }}</span>
-          </div>
-        </div>
-      </div>
-      <div v-else class="mb-8 text-center text-red-400 font-semibold">
+      <div v-else :class="[themeClasses.text, 'mb-8 text-center font-semibold text-red-400']">
         No active event set. Please set an active event first.
       </div>
 
       <!-- Recitalists & Guests List with Pagination -->
       <div>
-        <h2 class="text-2xl font-bold text-white mb-6">Recitalists & Guests</h2>
+        <h2 :class="[themeClasses.text, 'text-2xl font-bold mb-6']">Recitalists & Guests</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div
             v-for="group in paginatedGroupedTickets"
             :key="group.recitalist.id"
-            class="bg-[#232b3b] rounded-2xl shadow-lg border border-blue-900/40 p-6 flex flex-col gap-3 hover:border-blue-400 transition relative"
+            :class="[themeClasses.card, themeClasses.hover, 'rounded-2xl shadow-lg border p-6 flex flex-col gap-3 transition relative']"
           >
             <div class="flex items-center justify-between mb-2">
               <div>
                 <div class="text-xl font-bold text-blue-300 flex items-center gap-2">
-                  <span class="inline-block w-2 h-2 rounded-full bg-blue-400"></span>
+                  <span :class="['inline-block w-2 h-2 rounded-full', themeClasses.isDark ? 'bg-blue-400' : 'bg-blue-600']"></span>
                   {{ group.recitalist.name }}
                 </div>
                 <div class="text-xs text-gray-400 mt-1">Recitalist Ticket ID: <span class="font-mono">{{ group.recitalist.id }}</span></div>
@@ -639,17 +682,22 @@ function downloadCSVTemplate() {
                   'bg-green-600': group.recitalist.status === 'scanned'
                 }" class="px-3 py-1 text-white text-xs font-semibold rounded shadow">
                   {{ group.recitalist.status }}
-                </span>
-                <div class="flex gap-1 mt-2">
+                </span>                <div class="flex gap-1 mt-2">
                   <button
                     @click="previewTicketGroup(group.recitalist.name)"
-                    class="px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 transition shadow"
+                    :class="[
+                      'px-3 py-1 text-xs font-semibold rounded transition shadow',
+                      themeClasses.buttonPrimary
+                    ]"
                   >
                     Batch Preview
                   </button>
                   <button
                     @click="previewSingleTicket(group.recitalist)"
-                    class="px-3 py-1 bg-green-600 text-white text-xs font-semibold rounded hover:bg-green-700 transition shadow"
+                    :class="[
+                      'px-3 py-1 text-xs font-semibold rounded transition shadow',
+                      themeClasses.buttonSuccess
+                    ]"
                   >
                     QR Preview
                   </button>
@@ -672,10 +720,12 @@ function downloadCSVTemplate() {
                       'bg-green-600': guest.status === 'scanned'
                     }" class="px-2 py-0.5 text-white text-xs font-semibold rounded shadow">
                       {{ guest.status }}
-                    </span>
-                    <button
+                    </span>                    <button
                       @click="previewSingleTicket(guest)"
-                      class="px-2 py-0.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition"
+                      :class="[
+                        'px-2 py-0.5 text-xs rounded transition',
+                        themeClasses.buttonSuccess
+                      ]"
                     >
                       QR Preview
                     </button>
@@ -687,77 +737,81 @@ function downloadCSVTemplate() {
           <div v-if="paginatedGroupedTickets.length === 0" class="col-span-full text-center text-gray-500 py-8">
             No recitalists found for this event.
           </div>
-        </div>
-        <!-- Pagination Controls -->
+        </div>        <!-- Pagination Controls -->
         <div v-if="totalPages > 1" class="flex justify-center items-center gap-4 mt-8">
           <button
             @click="goToPage(currentPage - 1)"
             :disabled="currentPage === 1"
-            class="px-3 py-1 rounded bg-gray-700 text-white disabled:opacity-50"
+            :class="[
+              'px-4 py-2 rounded-lg font-medium text-sm transition-all',
+              currentPage === 1 ? themeClasses.paginationButtonDisabled : themeClasses.paginationButton
+            ]"
           >Previous</button>
-          <span class="text-white text-sm">Page {{ currentPage }} of {{ totalPages }}</span>
+          <span :class="[themeClasses.textPrimary, 'text-sm font-medium']">Page {{ currentPage }} of {{ totalPages }}</span>
           <button
             @click="goToPage(currentPage + 1)"
             :disabled="currentPage === totalPages"
-            class="px-3 py-1 rounded bg-gray-700 text-white disabled:opacity-50"
+            :class="[
+              'px-4 py-2 rounded-lg font-medium text-sm transition-all',
+              currentPage === totalPages ? themeClasses.paginationButtonDisabled : themeClasses.paginationButton
+            ]"
           >Next</button>
         </div>
       </div>
-    </div>
-
-    <!-- Modal for Add Recitalist or Batch Upload -->
+    </div>    <!-- Modal for Add Recitalist or Batch Upload -->
     <transition name="fade">
-      <div v-if="showModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-        <div class="bg-[#232b3b] rounded-xl max-w-md w-full shadow-2xl border border-blue-700 relative" @click.stop>
+      <div v-if="showModal" :class="['fixed inset-0 flex items-center justify-center z-50 p-4', themeClasses.overlay]">
+        <div :class="[themeClasses.card, 'rounded-xl max-w-md w-full shadow-2xl border relative']" @click.stop>
           <!-- Modal Header -->
-          <div class="flex items-center justify-between p-6 border-b border-gray-700">
-            <h3 class="text-lg font-semibold text-white">
+          <div :class="['flex items-center justify-between p-6 border-b', themeClasses.border]">
+            <h3 :class="[themeClasses.text, 'text-lg font-semibold']">
               {{ isBatch ? 'Batch Upload Recitalists (CSV)' : 'Add Recitalist' }}
             </h3>
-            <button @click="closeModal" class="text-gray-400 hover:text-red-400 transition-colors duration-200">
+            <button @click="closeModal" :class="[themeClasses.muted, 'hover:text-red-400 transition-colors duration-200']">
               <XMarkIcon class="w-6 h-6" />
             </button>
           </div>
           <!-- Modal Body -->
           <form v-if="!isBatch" @submit.prevent="addRecitalist" class="p-6 space-y-4">
             <div>
-              <label class="block text-sm font-medium text-gray-300 mb-1">Recitalist Name</label>
-              <input v-model="form.recitalist_name" required class="w-full px-3 py-2 border border-gray-700 rounded bg-[#181f2a] text-white focus:ring focus:ring-blue-400/30" />
+              <label :class="[themeClasses.muted, 'block text-sm font-medium mb-1']">Recitalist Name</label>
+              <input v-model="form.recitalist_name" required :class="[themeClasses.input, 'w-full px-3 py-2 rounded']" />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-300 mb-1">Number of Guests</label>
-              <input v-model.number="form.guest_count" type="number" min="0" required class="w-full px-3 py-2 border border-gray-700 rounded bg-[#181f2a] text-white focus:ring focus:ring-blue-400/30" />
+              <label :class="[themeClasses.muted, 'block text-sm font-medium mb-1']">Number of Guests</label>
+              <input v-model.number="form.guest_count" type="number" min="0" required :class="[themeClasses.input, 'w-full px-3 py-2 rounded']" />
             </div>
             <div class="flex justify-end gap-2 pt-2">
               <button
                 type="button"
                 @click="closeModal"
-                class="px-4 py-2 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition"
-              >Cancel</button>
-              <button
+                :class="[themeClasses.buttonSecondary, 'px-4 py-2 rounded transition-colors']"
+              >Cancel</button>              <button
                 type="submit"
-                class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                :class="[themeClasses.buttonPrimary, 'px-4 py-2 rounded transition-colors']"
               >Add</button>
             </div>
           </form>
           <form v-else class="p-6 space-y-4">
             <div>
-              <label class="block text-sm font-medium text-gray-300 mb-1">CSV File</label>
-              <button
+              <label :class="[themeClasses.muted, 'block text-sm font-medium mb-1']">CSV File</label>              <button
                 type="button"
                 @click="downloadCSVTemplate"
-                class="mb-3 px-3 py-1 bg-blue-700 text-white text-xs rounded hover:bg-blue-800 transition"
+                :class="[
+                  'mb-3 px-3 py-1 text-xs rounded transition-colors',
+                  themeClasses.buttonPrimary
+                ]"
               >
                 Download CSV Template
               </button>
-              <input type="file" accept=".csv" @change="handleCSVUpload" class="w-full text-white" />
-              <p class="text-xs text-gray-400 mt-2">Format: <code>recitalist_name,guest_count</code> (one per line)</p>
+              <input type="file" accept=".csv" @change="handleCSVUpload" :class="[themeClasses.input, 'w-full']" />
+              <p :class="[themeClasses.muted, 'text-xs mt-2']">Format: <code>recitalist_name,guest_count</code> (one per line)</p>
             </div>
             <div class="flex justify-end gap-2 pt-2">
               <button
                 type="button"
                 @click="closeModal"
-                class="px-4 py-2 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition"
+                :class="[themeClasses.buttonSecondary, 'px-4 py-2 rounded transition-colors']"
               >Close</button>
             </div>
           </form>
@@ -769,17 +823,17 @@ function downloadCSVTemplate() {
     <div v-if="showPreviewModal" class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto">
       <!-- Overlay -->
       <div
-        class="absolute inset-0 bg-black bg-opacity-60"
+        :class="['absolute inset-0', themeClasses.overlay]"
         @click="closePreviewModal"
       ></div>
       <!-- Modal content -->
       <div
-        class="relative z-10 bg-[#232b3b] rounded-lg max-w-4xl w-full max-h-full overflow-auto border border-blue-700 shadow-2xl"
+        :class="[themeClasses.card, 'relative z-10 rounded-lg max-w-4xl w-full max-h-full overflow-auto border shadow-2xl']"
         @click.stop
       >
         <!-- Modal Header -->
-        <div class="flex items-center justify-between p-6 border-b border-blue-700">
-          <h3 class="text-lg font-semibold text-white">
+        <div :class="['flex items-center justify-between p-6 border-b', themeClasses.border]">
+          <h3 :class="[themeClasses.text, 'text-lg font-semibold']">
             <template v-if="previewMode === 'batch'">
               Ticket Preview - {{ selectedPerformerName }}
             </template>
@@ -787,7 +841,7 @@ function downloadCSVTemplate() {
               Ticket Preview - {{ singlePreviewTicket?.name || singlePreviewTicket?.created_by_name || 'Guest' }}
             </template>
           </h3>
-          <button @click="closePreviewModal" class="text-gray-400 hover:text-red-400 transition-colors duration-200">
+          <button @click="closePreviewModal" :class="[themeClasses.muted, 'hover:text-red-400 transition-colors duration-200']">
             <XMarkIcon class="w-6 h-6" />
           </button>
         </div>
@@ -810,20 +864,24 @@ function downloadCSVTemplate() {
               :color="singlePreviewTicket.ticket_type === 'recitalist' ? 'blue' : 'green'"
             />
           </div>
-        </div>
-        <!-- Modal Footer -->
-        <div class="flex gap-3 p-6 border-t border-blue-700 justify-end">
-          <template v-if="previewMode === 'batch'">
-            <button 
+        </div>        <!-- Modal Footer -->
+        <div :class="['flex gap-3 p-6 border-t justify-end', themeClasses.border]">
+          <template v-if="previewMode === 'batch'">            <button 
               @click="handleBatchDownload('pdf')"
-              class="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors duration-200"
+              :class="[
+                'inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200',
+                themeClasses.buttonSuccess
+              ]"
             >
               <DocumentArrowDownIcon class="w-4 h-4 mr-2" />
               Download All as PDF
             </button>
             <button 
               @click="handleBatchDownload('zip')"
-              class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200"
+              :class="[
+                'inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200',
+                themeClasses.buttonPrimary
+              ]"
             >
               <DocumentArrowDownIcon class="w-4 h-4 mr-2" />
               Download All as ZIP
@@ -836,15 +894,23 @@ function downloadCSVTemplate() {
     </div>
 
     <!-- Claimer Prompt Modal -->
-    <div v-if="showClaimerPrompt" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-      <div class="bg-[#232b3b] rounded-xl max-w-md w-full shadow-2xl border border-blue-700 relative" @click.stop>
+    <div v-if="showClaimerPrompt" :class="['fixed inset-0 flex items-center justify-center z-50 p-4', themeClasses.overlay]">
+      <div :class="[themeClasses.card, 'rounded-xl max-w-md w-full shadow-2xl border relative']" @click.stop>
         <div class="p-6">
-          <h3 class="text-lg font-semibold text-white mb-4">Claim Tickets</h3>
-          <label class="block text-sm font-medium text-gray-300 mb-1">Claimer Name</label>
-          <input v-model="claimerName" class="w-full px-3 py-2 border border-gray-700 rounded bg-[#181f2a] text-white mb-4" />
+          <h3 :class="[themeClasses.text, 'text-lg font-semibold mb-4']">Claim Tickets</h3>
+          <label :class="[themeClasses.muted, 'block text-sm font-medium mb-1']">Claimer Name</label>
+          <input v-model="claimerName" :class="[themeClasses.input, 'w-full px-3 py-2 rounded mb-4']" />
           <div class="flex justify-end gap-2">
-            <button @click="cancelClaim" class="px-4 py-2 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition">Cancel</button>
-            <button @click="confirmClaim" :disabled="!claimerName.trim()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition">Confirm</button>
+            <button @click="cancelClaim" :class="[themeClasses.buttonSecondary, 'px-4 py-2 rounded transition-colors']">Cancel</button>
+            <button 
+              @click="confirmClaim" 
+              :disabled="!claimerName.trim()" 
+              :class="[
+                'px-4 py-2 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+                themeClasses.buttonSuccess
+              ]"
+            >
+              Confirm            </button>
           </div>
         </div>
       </div>

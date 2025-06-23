@@ -8,6 +8,7 @@ import HistoryView from '../views/qrcode/HistoryView.vue'
 import UserView from '../views/admin/UserView.vue'
 import TicketView from '../views/admin/TicketView.vue'
 import EventView from '../views/admin/EventView.vue'
+import ReportsView from '../views/admin/ReportsView.vue'
 import NotFound from '../views/NotFound.vue'
 
 const routes = [
@@ -58,6 +59,13 @@ const routes = [
         component: TicketView,
         meta: { sidebar: true, requiresAuth: true },
         beforeEnter: adminOrStaffGuard
+    },
+    {
+        path: '/admin/reports',
+        name: 'admin-reports',
+        component: ReportsView,
+        meta: { sidebar: true, requiresAuth: true, requiresAdmin: true },
+        beforeEnter: adminGuard
     },
     // 404 NotFound - Must be the last route
     {

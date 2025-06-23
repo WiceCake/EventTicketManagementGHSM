@@ -1,6 +1,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { supabase } from '../../lib/supabase'
+import { useTheme } from '../../composables/useTheme'
+
+const { themeClasses } = useTheme()
 
 const users = ref([])
 const loading = ref(true)
@@ -123,99 +126,169 @@ async function saveUser() {
 onMounted(fetchUsers)
 </script>
 
-<template>
-  <div class="event-bg min-h-screen py-10 px-2">
-    <div v-if="toast.show" :class="['fixed top-6 left-1/2 z-50 px-6 py-3 rounded-lg shadow-lg text-base font-semibold transition-all', toast.success ? 'bg-green-600 text-white' : 'bg-red-600 text-white']" style="transform: translateX(-50%); min-width: 220px;">
+<template>  <div :class="['min-h-screen py-8 px-4', themeClasses.pageBackground]">
+    <!-- Toast Notification -->
+    <div 
+      v-if="toast.show" 
+      :class="[
+        'fixed top-6 left-1/2 z-50 px-6 py-3 rounded-lg shadow-lg text-sm font-semibold transition-all transform -translate-x-1/2',
+        toast.success ? themeClasses.toastSuccess : themeClasses.toastError
+      ]"
+    >
       {{ toast.message }}
     </div>
-    <div class="max-w-5xl mx-auto">
+
+    <div class="max-w-6xl mx-auto space-y-8">
       <!-- Page Header -->
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-gray-700 mb-8">
-        <h1 class="text-3xl font-bold text-white mb-4 sm:mb-0 tracking-tight">User Management</h1>
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 :class="['text-3xl font-bold tracking-tight', themeClasses.textPrimary]">User Management</h1>
+          <p :class="['mt-2 text-lg', themeClasses.textMuted]">Manage system users and their permissions</p>
+        </div>
         <button
           @click="openCreateModal"
-          class="inline-flex items-center px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg shadow hover:bg-blue-700 transition-colors duration-200"
+          :class="[
+            'mt-4 sm:mt-0 inline-flex items-center px-6 py-3 rounded-lg font-semibold shadow-lg transition-all duration-200 hover:shadow-xl transform hover:-translate-y-0.5',
+            themeClasses.buttonPrimary
+          ]"
         >
-          + Add User
+          <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+          Add User
         </button>
+      </div>      <!-- Loading State -->
+      <div v-if="loading" class="text-center py-16">
+        <div :class="['inline-block w-8 h-8 border-4 border-current border-r-transparent rounded-full animate-spin', themeClasses.textMuted]"></div>
+        <p :class="['mt-4 text-lg font-medium', themeClasses.textMuted]">Loading users...</p>
       </div>
-
-      <!-- Loading -->
-      <div v-if="loading" class="text-center py-12 text-gray-400">Loading users...</div>
 
       <!-- User List -->
       <div v-else>
-        <div class="mb-6">
-          <h2 class="text-xl font-semibold text-white mb-4">All Users</h2>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="space-y-6">
+          <h2 :class="['text-2xl font-semibold', themeClasses.textPrimary]">All Users</h2>
+          
+          <!-- User Cards Grid -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
             <div
               v-for="user in users"
               :key="user.id"
-              class="bg-[#181f2a] rounded-xl shadow border border-gray-700 p-6 flex flex-col gap-2 hover:border-blue-500 transition relative"
+              :class="[
+                'group rounded-xl shadow-lg border p-6 space-y-4 transition-all duration-200 hover:shadow-xl transform hover:-translate-y-1',
+                themeClasses.card,
+                themeClasses.cardBorder
+              ]"
             >
-              <div class="flex items-center justify-between">
-                <div>
-                  <div class="text-lg font-bold text-blue-400 flex items-center gap-2">
-                    {{ user.username || user.email }}
-                    <span
-                      v-if="user.is_active"
-                      class="ml-2 px-2 py-0.5 rounded-full bg-green-600 text-xs text-white font-semibold"
-                      title="Active User"
-                    >Active</span>
-                    <span
-                      v-else
-                      class="ml-2 px-2 py-0.5 rounded-full bg-gray-600 text-xs text-white font-semibold"
-                      title="Inactive User"
-                    >Inactive</span>
+              <!-- User Header -->
+              <div class="flex items-start justify-between">
+                <div class="flex items-center gap-3">
+                  <div :class="[
+                    'w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold',
+                    user.is_active 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-400 text-gray-100'
+                  ]">
+                    {{ (user.username || user.email)[0].toUpperCase() }}
                   </div>
-                  <div class="text-sm text-gray-400">{{ user.email }}</div>
+                  <div>
+                    <h3 :class="['text-lg font-bold', themeClasses.textPrimary]">
+                      {{ user.username || user.email }}
+                    </h3>
+                    <p :class="['text-sm', themeClasses.textMuted]">{{ user.email }}</p>
+                  </div>
                 </div>
-                <div class="flex gap-2">
+                
+                <!-- Action Button -->
+                <button
+                  @click="openEditModal(user)"
+                  :class="[
+                    'opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-2 rounded-lg',
+                    themeClasses.hover
+                  ]"
+                  title="Edit User"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+              </div>
+
+              <!-- User Details -->
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <span :class="['text-sm font-medium', themeClasses.textSecondary]">Full Name:</span>
+                  <span :class="['text-sm', themeClasses.textPrimary]">{{ user.full_name || '—' }}</span>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                  <span :class="['text-sm font-medium', themeClasses.textSecondary]">Role:</span>
                   <span
-                    class="px-3 py-1 bg-blue-500 text-white text-xs font-semibold rounded"
-                    :class="{
-                      'bg-blue-500': user.role === 'admin',
-                      'bg-purple-500': user.role === 'staff',
-                      'bg-gray-500': user.role !== 'admin' && user.role !== 'staff'
-                    }"
+                    :class="[
+                      'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border',
+                      user.role === 'admin' 
+                        ? themeClasses.badgeDanger
+                        : user.role === 'staff'
+                        ? themeClasses.badgeWarning
+                        : themeClasses.badgePrimary
+                    ]"
                   >
                     {{ user.role }}
                   </span>
-                  <button
-                    @click="openEditModal(user)"
-                    class="px-3 py-1 bg-blue-500 text-white text-xs font-semibold rounded hover:bg-blue-600 transition"
-                    title="Edit User"
+                </div>
+                
+                <div class="flex items-center justify-between">
+                  <span :class="['text-sm font-medium', themeClasses.textSecondary]">Status:</span>
+                  <span
+                    :class="[
+                      'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border',
+                      user.is_active ? themeClasses.badgeSuccess : themeClasses.badgeDanger
+                    ]"
                   >
-                    Edit
-                  </button>
+                    {{ user.is_active ? 'Active' : 'Inactive' }}
+                  </span>
                 </div>
               </div>
-              <div class="mt-2">
-                <div class="text-sm text-gray-300"><span class="font-semibold">Full Name:</span> {{ user.full_name }}</div>
-                <div class="text-xs text-gray-500 mt-2">
-                  <span>Created: {{ formatDate(user.created_at) }}</span>
-                  <span v-if="user.updated_at"> | Updated: {{ formatDate(user.updated_at) }}</span>
-                </div>
+
+              <!-- Timestamps -->
+              <div :class="['pt-4 border-t text-xs space-y-1', themeClasses.cardBorder, themeClasses.textMuted]">
+                <div>Created: {{ formatDate(user.created_at) }}</div>
+                <div v-if="user.updated_at">Updated: {{ formatDate(user.updated_at) }}</div>
               </div>
             </div>
-            <div v-if="users.length === 0" class="col-span-full text-center text-gray-500 py-8">
-              No users found.
-            </div>
+          </div>
+          
+          <!-- Empty State -->
+          <div v-if="users.length === 0" class="text-center py-16">
+            <svg :class="['w-16 h-16 mx-auto mb-6 opacity-50', themeClasses.textMuted]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+            </svg>
+            <h3 :class="['text-xl font-semibold mb-2', themeClasses.textPrimary]">No Users Found</h3>
+            <p :class="['max-w-md mx-auto', themeClasses.textMuted]">
+              Get started by adding your first user to the system.
+            </p>
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- Modal for Create/Edit User -->
+    </div><!-- Modal for Create/Edit User -->
     <transition name="fade">
       <div v-if="showModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-        <div class="bg-[#232b3b] rounded-xl max-w-md w-full shadow-2xl border border-blue-700 relative" @click.stop>
+        <div 
+          :class="[
+            'rounded-xl max-w-md w-full shadow-2xl border relative',
+            themeClasses.modal,
+            themeClasses.cardBorder
+          ]" 
+          @click.stop
+        >
           <!-- Modal Header -->
-          <div class="flex items-center justify-between p-6 border-b border-gray-700">
-            <h3 class="text-lg font-semibold text-white">
+          <div :class="['flex items-center justify-between p-6 border-b', themeClasses.cardBorder]">
+            <h3 :class="['text-lg font-semibold', themeClasses.textPrimary]">
               {{ isEditing ? 'Edit User' : 'Add New User' }}
             </h3>
-            <button @click="closeModal" class="text-gray-400 hover:text-red-400 transition-colors duration-200">
+            <button 
+              @click="closeModal" 
+              :class="['transition-colors duration-200', themeClasses.textMuted, 'hover:text-red-500']"
+            >
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -224,27 +297,69 @@ onMounted(fetchUsers)
           <!-- Modal Body -->
           <form @submit.prevent="isEditing ? saveUser() : createUser()" class="p-6 space-y-4">
             <div>
-              <label class="block text-sm font-medium text-gray-300 mb-1">Email</label>
-              <input v-model="form.email" type="email" required class="w-full px-3 py-2 border border-gray-700 rounded bg-[#181f2a] text-white focus:ring focus:ring-blue-400/30" />
+              <label :class="['block text-sm font-medium mb-1', themeClasses.text]">Email</label>
+              <input 
+                v-model="form.email" 
+                type="email" 
+                required 
+                :class="[
+                  'w-full px-3 py-2 border rounded transition-colors duration-200',
+                  themeClasses.input,
+                  themeClasses.inputBorder,
+                  'focus:ring-2 focus:ring-blue-500/30'
+                ]" 
+              />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-300 mb-1">Username</label>
-              <input v-model="form.username" required class="w-full px-3 py-2 border border-gray-700 rounded bg-[#181f2a] text-white focus:ring focus:ring-blue-400/30" />
+              <label :class="['block text-sm font-medium mb-1', themeClasses.text]">Username</label>
+              <input 
+                v-model="form.username" 
+                required 
+                :class="[
+                  'w-full px-3 py-2 border rounded transition-colors duration-200',
+                  themeClasses.input,
+                  themeClasses.inputBorder,
+                  'focus:ring-2 focus:ring-blue-500/30'
+                ]" 
+              />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-300 mb-1">Full Name</label>
-              <input v-model="form.full_name" required class="w-full px-3 py-2 border border-gray-700 rounded bg-[#181f2a] text-white focus:ring focus:ring-blue-400/30" />
+              <label :class="['block text-sm font-medium mb-1', themeClasses.text]">Full Name</label>
+              <input 
+                v-model="form.full_name" 
+                required 
+                :class="[
+                  'w-full px-3 py-2 border rounded transition-colors duration-200',
+                  themeClasses.input,
+                  themeClasses.inputBorder,
+                  'focus:ring-2 focus:ring-blue-500/30'
+                ]" 
+              />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-300 mb-1">Role</label>
-              <select v-model="form.role" class="w-full px-3 py-2 border border-gray-700 rounded bg-[#181f2a] text-white">
+              <label :class="['block text-sm font-medium mb-1', themeClasses.text]">Role</label>
+              <select 
+                v-model="form.role" 
+                :class="[
+                  'w-full px-3 py-2 border rounded transition-colors duration-200',
+                  themeClasses.input,
+                  themeClasses.inputBorder
+                ]"
+              >
                 <option value="admin">admin</option>
                 <option value="staff">staff</option>
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-300 mb-1">Active</label>
-              <select v-model="form.is_active" class="w-full px-3 py-2 border border-gray-700 rounded bg-[#181f2a] text-white">
+              <label :class="['block text-sm font-medium mb-1', themeClasses.text]">Active</label>
+              <select 
+                v-model="form.is_active" 
+                :class="[
+                  'w-full px-3 py-2 border rounded transition-colors duration-200',
+                  themeClasses.input,
+                  themeClasses.inputBorder
+                ]"
+              >
                 <option :value="true">Active</option>
                 <option :value="false">Inactive</option>
               </select>
@@ -253,11 +368,17 @@ onMounted(fetchUsers)
               <button
                 type="button"
                 @click="closeModal"
-                class="px-4 py-2 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition"
+                :class="[
+                  'px-4 py-2 rounded transition-colors duration-200',
+                  themeClasses.buttonSecondary
+                ]"
               >Cancel</button>
               <button
                 type="submit"
-                class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                :class="[
+                  'px-4 py-2 rounded transition-colors duration-200',
+                  themeClasses.buttonPrimary
+                ]"
               >{{ isEditing ? 'Save Changes' : 'Create User' }}</button>
             </div>
           </form>
@@ -268,10 +389,6 @@ onMounted(fetchUsers)
 </template>
 
 <style scoped>
-.event-bg {
-  background: linear-gradient(135deg, #181f2a 0%, #232b3b 100%);
-  min-height: 100vh;
-}
 .fade-enter-active, .fade-leave-active {
   transition: opacity 0.2s;
 }

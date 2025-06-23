@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { supabase } from '../../lib/supabase'
+import { useTheme } from '../../composables/useTheme'
 import {
   MagnifyingGlassIcon,
   FunnelIcon,
@@ -18,6 +19,8 @@ import {
   FaceFrownIcon
 } from '@heroicons/vue/24/solid';
 
+const { themeClasses } = useTheme()
+
 // Reactive state
 const searchQuery = ref('');
 const selectedFilter = ref('all');
@@ -30,6 +33,7 @@ const pageSize = 10
 const total = ref(0)
 const search = ref('')
 const actionFilter = ref('all')
+const activeEvent = ref(null)
 
 const actions = [
   { label: 'All', value: 'all' },
@@ -189,11 +193,30 @@ const refreshHistory = () => {
   }, 1000);
 };
 
+async function fetchActiveEvent() {
+  const { data } = await supabase
+    .from('event_config')
+    .select('*')
+    .eq('is_active', true)
+    .eq('is_finished', false)
+    .maybeSingle()
+  if (data) activeEvent.value = data
+}
+
 async function fetchLogs() {
   loading.value = true
+  
+  if (!activeEvent.value) {
+    logs.value = []
+    total.value = 0
+    loading.value = false
+    return
+  }
+
   let query = supabase
     .from('ticket_logs')
-    .select('*, users: user_id (full_name, email), tickets: ticket_id (name)')
+    .select('*, users: user_id (full_name, email), tickets: ticket_id (name, event_id)')
+    .eq('tickets.event_id', activeEvent.value.id)
     .order('created_at', { ascending: false })
     .range((page.value - 1) * pageSize, page.value * pageSize - 1)
 
@@ -206,121 +229,186 @@ async function fetchLogs() {
   }
 
   const { data, count } = await query
-    .select('*, users: user_id (full_name, email), tickets: ticket_id (name)', { count: 'exact' })
+    .select('*, users: user_id (full_name, email), tickets: ticket_id (name, event_id)', { count: 'exact' })
 
   logs.value = data || []
   total.value = count || 0
   loading.value = false
 }
 
-onMounted(fetchLogs)
+onMounted(async () => {
+  await fetchActiveEvent()
+  await fetchLogs()
+})
 watch([page, actionFilter, search], fetchLogs)
 </script>
 
-<template>
-  <div class="event-bg min-h-screen py-10 px-2">
-    <div class="max-w-4xl mx-auto">
-      <div class="bg-[#232b3b] rounded-2xl shadow-2xl border border-blue-700 p-8 mb-8">
-        <h1 class="text-3xl font-extrabold text-white mb-6">Scan History</h1>
-        <div class="flex flex-col md:flex-row md:items-end gap-4 mb-6">
-          <div class="flex-1">
-            <label class="block text-sm text-gray-300 mb-1">Search</label>
-            <input
-              v-model="search"
-              type="text"
-              placeholder="Search by notes, user, or ticket"
-              class="w-full px-4 py-2 border border-gray-700 rounded-md text-base bg-[#181f2a] text-white focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label class="block text-sm text-gray-300 mb-1">Action</label>
-            <select
-              v-model="actionFilter"
-              class="w-full px-4 py-2 border border-gray-700 rounded-md text-base bg-[#181f2a] text-white"
-            >
-              <option v-for="a in actions" :key="a.value" :value="a.value">{{ a.label }}</option>
-            </select>
-          </div>
-        </div>
-        <div class="overflow-x-auto rounded-lg">
-          <table class="min-w-full bg-[#181f2a] rounded-lg">
-            <thead>
-              <tr class="text-left text-gray-400 text-sm border-b border-blue-700">
-                <th class="py-3 px-4">Timestamp</th>
-                <th class="py-3 px-4">Action</th>
-                <th class="py-3 px-4">Ticket</th>
-                <th class="py-3 px-4">User</th>
-                <th class="py-3 px-4">Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="log in logs" :key="log.id" class="border-b border-blue-900 hover:bg-[#232b3b] transition">
-                <td class="py-2 px-4 text-gray-300">{{ new Date(log.created_at).toLocaleString() }}</td>
-                <td class="py-2 px-4">
-                  <span
-                    :class="[
-                      'inline-block px-3 py-1 rounded-full text-xs font-semibold',
-                      log.action === 'checkin' || log.action === 'scanned'
-                        ? 'bg-green-100 text-green-800'
-                        : log.action === 'invalid'
-                        ? 'bg-red-100 text-red-800'
-                        : log.action === 'claimed'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-blue-100 text-blue-800'
-                    ]"
+<template>  <div :class="[themeClasses.pageBackground, 'min-h-screen py-8 px-4']">
+    <div class="max-w-6xl mx-auto space-y-6">
+      <div :class="[themeClasses.card, themeClasses.cardBorder, 'rounded-2xl shadow-xl p-8 space-y-6']">
+        <!-- Header -->
+        <div class="flex items-center justify-between">
+          <h1 :class="[themeClasses.textPrimary, 'text-3xl font-bold flex items-center']">
+            <ClockIcon class="w-8 h-8 mr-3" />
+            Ticket History
+          </h1>
+          <button
+            @click="refreshHistory"
+            :disabled="isLoading"
+            :class="[
+              'flex items-center px-4 py-2 rounded-lg font-medium text-sm transition-all shadow-sm',
+              themeClasses.buttonSecondary,
+              isLoading && 'opacity-50 cursor-not-allowed'
+            ]"
+          >
+            <ArrowPathIcon :class="['w-4 h-4 mr-2', isLoading && 'animate-spin']" />
+            Refresh
+          </button>
+        </div>          <!-- Filters (always visible and styled) -->
+        <div class="space-y-6 pt-2">          <!-- Filters -->
+          <div class="flex flex-col md:flex-row gap-6 pt-4">
+            <div class="flex-1">
+              <label :class="[themeClasses.textSecondary, 'block text-sm font-medium mb-3']">Search</label>
+              <input
+                v-model="search"
+                type="text"
+                placeholder="Search by notes, user, or ticket..."
+                :class="[
+                  themeClasses.input, 
+                  'w-full px-4 py-3 rounded-lg text-sm border-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-md hover:shadow-lg'
+                ]"
+              />
+            </div>            <div class="w-full md:w-56">
+              <label :class="[themeClasses.textSecondary, 'block text-sm font-medium mb-3']">Filter by Action</label>
+              <div class="relative">
+                <select
+                  v-model="actionFilter"
+                  :class="[
+                    themeClasses.select || themeClasses.input, 
+                    'w-full px-4 py-3 pr-10 rounded-lg text-sm border-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-md hover:shadow-lg appearance-none cursor-pointer'
+                  ]"
+                >
+                  <option v-for="a in actions" :key="a.value" :value="a.value">{{ a.label }}</option>
+                </select>
+                <!-- Custom dropdown arrow -->
+                <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                  <FunnelIcon :class="[themeClasses.textMuted, 'w-4 h-4']" />
+                </div>
+              </div>
+            </div>
+          </div><!-- Table -->
+          <div v-if="activeEvent" class="overflow-hidden rounded-lg border" :class="themeClasses.cardBorder">
+            <div class="overflow-x-auto">
+              <table :class="[themeClasses.card, 'min-w-full']">
+                <thead>
+                  <tr :class="[themeClasses.tableHeader, 'border-b']">
+                    <th :class="[themeClasses.textSecondary, 'text-left py-4 px-6 text-sm font-semibold']">Timestamp</th>
+                    <th :class="[themeClasses.textSecondary, 'text-left py-4 px-6 text-sm font-semibold']">Action</th>
+                    <th :class="[themeClasses.textSecondary, 'text-left py-4 px-6 text-sm font-semibold']">Ticket</th>
+                    <th :class="[themeClasses.textSecondary, 'text-left py-4 px-6 text-sm font-semibold']">User</th>
+                    <th :class="[themeClasses.textSecondary, 'text-left py-4 px-6 text-sm font-semibold']">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr 
+                    v-for="log in logs" 
+                    :key="log.id" 
+                    :class="[themeClasses.tableRow, 'border-b transition-colors hover:shadow-sm']"
                   >
-                    {{ log.action.charAt(0).toUpperCase() + log.action.slice(1) }}
-                  </span>
-                </td>
-                <td class="py-2 px-4 text-gray-200">
-                  {{ log.tickets?.name || log.ticket_id }}
-                </td>
-                <td class="py-2 px-4 text-gray-200">
-                  {{ log.users?.full_name || log.users?.email || '—' }}
-                </td>
-                <td class="py-2 px-4 text-gray-400">{{ log.notes }}</td>
-              </tr>
-              <tr v-if="!loading && logs.length === 0">
-                <td colspan="5" class="text-center py-8 text-gray-500">
-                  <div class="flex flex-col items-center">
-                    <QrCodeIcon class="w-12 h-12 mb-2 text-gray-400" />
-                    <span>No logs found</span>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <!-- Pagination -->
-        <div class="flex justify-between items-center mt-6">
-          <span class="text-gray-400 text-sm">
-            Showing {{ (page - 1) * pageSize + 1 }} -
-            {{ Math.min(page * pageSize, total) }} of {{ total }}
-          </span>
-          <div class="flex gap-2">
-            <button
-              @click="page = Math.max(1, page - 1)"
-              :disabled="page === 1"
-              class="px-4 py-2 rounded bg-blue-700 text-white font-semibold disabled:opacity-50"
-            >Prev</button>
-            <button
-              @click="page = page + 1"
-              :disabled="page * pageSize >= total"
-              class="px-4 py-2 rounded bg-blue-700 text-white font-semibold disabled:opacity-50"
-            >Next</button>
+                    <td :class="[themeClasses.textPrimary, 'py-4 px-6 text-sm']">
+                      {{ new Date(log.created_at).toLocaleString() }}
+                    </td>
+                    <td class="py-4 px-6">
+                      <span
+                        :class="[
+                          'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border',
+                          log.action === 'checkin' || log.action === 'scanned'
+                            ? themeClasses.badgeSuccess
+                            : log.action === 'invalid'
+                            ? themeClasses.badgeDanger
+                            : log.action === 'claimed'
+                            ? themeClasses.badgeWarning
+                            : themeClasses.badgePrimary
+                        ]"
+                      >
+                        {{ log.action.charAt(0).toUpperCase() + log.action.slice(1) }}
+                      </span>
+                    </td>
+                    <td :class="[themeClasses.textPrimary, 'py-4 px-6 text-sm font-medium']">
+                      {{ log.tickets?.name || log.ticket_id }}
+                    </td>
+                    <td :class="[themeClasses.textPrimary, 'py-4 px-6 text-sm']">
+                      {{ log.users?.full_name || log.users?.email || '—' }}
+                    </td>
+                    <td :class="[themeClasses.textMuted, 'py-4 px-6 text-sm']">{{ log.notes }}</td>
+                  </tr>
+                  
+                  <!-- Empty State -->
+                  <tr v-if="!loading && logs.length === 0">
+                    <td colspan="5" class="text-center py-16">
+                      <div class="flex flex-col items-center">
+                        <FaceFrownIcon :class="[themeClasses.textMuted, 'w-12 h-12 mb-3 opacity-50']" />
+                        <span :class="[themeClasses.textMuted, 'text-lg font-medium']">No logs found</span>
+                        <span :class="[themeClasses.textMuted, 'text-sm mt-1']">Try adjusting your search or filter criteria</span>
+                      </div>
+                    </td>
+                  </tr>
+                  
+                  <!-- Loading State -->
+                  <tr v-if="loading">
+                    <td colspan="5" class="text-center py-16">
+                      <div class="flex flex-col items-center">
+                        <ArrowPathIcon :class="[themeClasses.textMuted, 'w-8 h-8 mb-3 animate-spin']" />
+                        <span :class="[themeClasses.textMuted, 'text-lg font-medium']">Loading logs...</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+
+          <!-- No Active Event Message (when no active event but search/filter are still available) -->
+          <div v-if="!activeEvent" :class="[themeClasses.card, themeClasses.cardBorder, 'rounded-lg p-12 text-center']">
+            <QrCodeIcon :class="[themeClasses.textMuted, 'w-16 h-16 mx-auto mb-4 opacity-50']" />
+            <h3 :class="[themeClasses.textPrimary, 'text-xl font-semibold mb-2']">No Active Event</h3>
+            <p :class="[themeClasses.textMuted, 'max-w-md mx-auto']">
+              No active event found. Please set an event as active in the admin panel to view ticket logs and scan history.
+            </p>
+          </div><!-- Pagination -->
+          <div v-if="activeEvent" class="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
+            <span :class="[themeClasses.textMuted, 'text-sm']">
+              Showing {{ (page - 1) * pageSize + 1 }} - {{ Math.min(page * pageSize, total) }} of {{ total }} results
+            </span>
+            <div class="flex gap-2">
+              <button
+                @click="page = Math.max(1, page - 1)"
+                :disabled="page === 1"
+                :class="[
+                  'px-4 py-2 rounded-lg font-medium text-sm transition-all shadow-sm',
+                  page === 1 ? themeClasses.paginationButtonDisabled : themeClasses.paginationButton
+                ]"
+              >
+                Previous
+              </button>
+              <button
+                @click="page = page + 1"
+                :disabled="page * pageSize >= total"
+                :class="[
+                  'px-4 py-2 rounded-lg font-medium text-sm transition-all shadow-sm',
+                  page * pageSize >= total ? themeClasses.paginationButtonDisabled : themeClasses.paginationButton
+                ]"
+              >
+                Next
+              </button>
+            </div>        </div>
       </div>
     </div>
+  </div>
   </div>
 </template>
 
 <style scoped>
-.event-bg {
-  background: linear-gradient(135deg, #181f2a 0%, #232b3b 100%);
-  min-height: 100vh;
-}
-
 /* Custom scrollbar for table */
 .overflow-x-auto {
   scrollbar-width: thin;

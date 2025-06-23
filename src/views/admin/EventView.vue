@@ -1,6 +1,270 @@
+<template>  <div :class="[themeClasses.pageBackground, 'min-h-screen py-8 px-4']">
+    <!-- Toast Notification -->
+    <div 
+      v-if="toast.show" 
+      :class="[
+        'fixed top-6 left-1/2 z-50 px-6 py-3 rounded-lg shadow-lg text-sm font-semibold transition-all transform -translate-x-1/2',
+        toast.success ? themeClasses.toastSuccess : themeClasses.toastError
+      ]"
+    >
+      {{ toast.message }}
+    </div>
+    
+    <div class="max-w-6xl mx-auto space-y-8">
+      <!-- Page Header -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 :class="[themeClasses.textPrimary, 'text-3xl font-bold tracking-tight']">Event Management</h1>
+          <p :class="[themeClasses.textMuted, 'mt-2 text-lg']">Manage events and their configurations</p>
+        </div>
+        <button
+          @click="openCreateModal"
+          :class="[
+            'mt-4 sm:mt-0 inline-flex items-center px-6 py-3 rounded-lg font-semibold shadow-lg transition-all duration-200 hover:shadow-xl transform hover:-translate-y-0.5',
+            themeClasses.buttonPrimary
+          ]"
+        >
+          <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+          Add Event
+        </button>
+      </div>
+
+      <!-- Loading -->
+      <div v-if="loading" class="text-center py-16">
+        <div :class="['inline-block w-8 h-8 border-4 border-current border-r-transparent rounded-full animate-spin', themeClasses.textMuted]"></div>
+        <p :class="['mt-4 text-lg font-medium', themeClasses.textMuted]">Loading events...</p>
+      </div>
+
+      <!-- Event List -->
+      <div v-else>
+        <div class="space-y-6">
+          <h2 :class="[themeClasses.textPrimary, 'text-2xl font-semibold']">All Events</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div
+                v-for="event in events"
+                :key="event.id"
+                :class="[
+                  themeClasses.card, 
+                  themeClasses.cardBorder,
+                  themeClasses.cardHover, 
+                  'rounded-xl shadow-md border p-6 space-y-4 transition-all hover:shadow-lg'
+                ]"
+              >
+                <div class="flex items-start justify-between">
+                  <div class="flex-1 min-w-0">
+                    <h3 :class="[themeClasses.textPrimary, 'text-lg font-semibold truncate']">
+                      {{ event.event_name }}
+                    </h3>
+                    <p :class="[themeClasses.textMuted, 'text-sm mt-1']">
+                      {{ formatDate(event.event_date) }}
+                    </p>
+                  </div>
+                  
+                  <div class="flex items-center gap-2 ml-3">
+                    <!-- Status Badge -->
+                    <span
+                      v-if="event.is_finished"
+                      :class="[themeClasses.badgeSecondary, 'px-2 py-1 rounded-full text-xs font-medium']"
+                    >
+                      Finished
+                    </span>
+                    <span
+                      v-else-if="event.is_active"
+                      :class="[themeClasses.badgeSuccess, 'px-2 py-1 rounded-full text-xs font-medium']"
+                    >
+                      Active
+                    </span>
+                    
+                    <!-- Actions -->
+                    <div v-if="event.is_active && !event.is_finished" class="relative">
+                      <button 
+                        @click.stop="toggleMenu(event.id)" 
+                        :class="[
+                          'p-2 rounded-full transition-colors',
+                          themeClasses.buttonSecondary
+                        ]" 
+                        title="More Options"
+                      >
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                          <circle cx="5" cy="12" r="2"/>
+                          <circle cx="12" cy="12" r="2"/>
+                          <circle cx="19" cy="12" r="2"/>
+                        </svg>
+                      </button>
+                      
+                      <div
+                        v-if="openMenuId === event.id"
+                        @click.stop
+                        :class="[
+                          'absolute right-0 mt-2 w-40 rounded-lg shadow-lg z-20 border overflow-hidden',
+                          themeClasses.card,
+                          themeClasses.cardBorder
+                        ]"
+                      >
+                        <button
+                          @click="finishEvent(event.id); closeMenu()"
+                          :class="[
+                            'w-full text-left px-4 py-3 text-sm transition-colors',
+                            themeClasses.menuItem
+                          ]"
+                        >
+                          Finish Event
+                        </button>
+                        <button
+                          @click="openEditModal(event); closeMenu()"
+                          :class="[
+                            'w-full text-left px-4 py-3 text-sm transition-colors',
+                            themeClasses.menuItem
+                          ]"
+                        >
+                          Edit Event
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <!-- Set Active button for inactive events -->
+                    <button
+                      v-if="!event.is_active && !event.is_finished"
+                      @click="setActiveEvent(event.id)"
+                      :class="[
+                        'px-3 py-1 text-xs font-medium rounded-md transition-all',
+                        themeClasses.buttonSuccess
+                      ]"
+                      title="Set as Active Event"
+                    >
+                      Set Active
+                    </button>
+                  </div>
+                </div>
+                
+                <div class="space-y-2">
+                  <div :class="[themeClasses.textSecondary, 'text-sm']">
+                    <span class="font-medium">Venue:</span> {{ event.venue_name }}
+                  </div>
+                  <div :class="[themeClasses.textSecondary, 'text-sm']">
+                    <span class="font-medium">Max Tickets:</span> {{ event.max_tickets }}
+                  </div>
+                  <div :class="[themeClasses.textMuted, 'text-xs border-t pt-2 mt-3']" :style="`border-color: ${themeClasses.cardBorder.split(' ').pop()}`">
+                    <span>Created: {{ formatDate(event.created_at) }}</span>
+                    <span v-if="event.updated_at"> • Updated: {{ formatDate(event.updated_at) }}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Empty State -->
+              <div v-if="events.length === 0" class="col-span-full text-center py-16">
+                <svg :class="[themeClasses.textMuted, 'w-16 h-16 mx-auto mb-4 opacity-50']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3a4 4 0 118 0v4m-4 6v-3a1 1 0 00-1-1H7a1 1 0 00-1 1v3m8 0V10a1 1 0 00-1-1h-4a1 1 0 00-1 1v3m8 0h-8"></path>                </svg>
+                <h3 :class="[themeClasses.textPrimary, 'text-lg font-medium mb-2']">No events found</h3>
+                <p :class="[themeClasses.textMuted, 'text-sm']">Get started by creating your first event</p>
+              </div>
+            </div>
+          </div>
+        </div>
+    </div><!-- Modal for Create/Edit Event -->
+    <transition name="fade">
+      <div v-if="showModal" :class="[themeClasses.overlay, 'fixed inset-0 flex items-center justify-center z-50 p-4']">
+        <div :class="[themeClasses.card, themeClasses.cardBorder, 'rounded-xl max-w-md w-full shadow-2xl relative']" @click.stop>
+          <!-- Modal Header -->
+          <div :class="['flex items-center justify-between p-6 border-b', themeClasses.cardBorder]">
+            <h3 :class="[themeClasses.textPrimary, 'text-lg font-semibold']">
+              {{ isEditing ? 'Edit Event' : 'Add New Event' }}
+            </h3>
+            <button @click="closeModal" :class="[themeClasses.textMuted, 'hover:text-red-500 transition-colors']">
+              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          
+          <!-- Modal Body -->
+          <form @submit.prevent="isEditing ? saveEvent() : createEvent()" class="p-6 space-y-4">
+            <div>
+              <label :class="[themeClasses.textSecondary, 'block text-sm font-medium mb-2']">Event Name</label>
+              <input 
+                v-model="form.event_name" 
+                required 
+                :class="[
+                  themeClasses.input, 
+                  'w-full px-4 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all'
+                ]" 
+                placeholder="Enter event name"
+              />
+            </div>
+            <div>
+              <label :class="[themeClasses.textSecondary, 'block text-sm font-medium mb-2']">Event Date</label>
+              <input 
+                v-model="form.event_date" 
+                type="date" 
+                required 
+                :class="[
+                  themeClasses.input, 
+                  'w-full px-4 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all'
+                ]" 
+              />
+            </div>
+            <div>
+              <label :class="[themeClasses.textSecondary, 'block text-sm font-medium mb-2']">Venue Name</label>
+              <input 
+                v-model="form.venue_name" 
+                required 
+                :class="[
+                  themeClasses.input, 
+                  'w-full px-4 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all'
+                ]" 
+                placeholder="Enter venue name"
+              />
+            </div>
+            <div>
+              <label :class="[themeClasses.textSecondary, 'block text-sm font-medium mb-2']">Max Tickets</label>
+              <input 
+                v-model.number="form.max_tickets" 
+                type="number" 
+                min="1" 
+                required 
+                :class="[
+                  themeClasses.input, 
+                  'w-full px-4 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all'
+                ]" 
+                placeholder="Enter maximum number of tickets"
+              />
+            </div>
+            <div class="flex justify-end gap-3 pt-4">
+              <button
+                type="button"
+                @click="closeModal"
+                :class="[
+                  themeClasses.buttonSecondary, 
+                  'px-4 py-2 text-sm font-medium rounded-lg transition-all shadow-sm'
+                ]"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                :class="[
+                  themeClasses.buttonPrimary, 
+                  'px-4 py-2 text-sm font-medium rounded-lg transition-all shadow-sm'
+                ]"
+              >
+                {{ isEditing ? 'Save Changes' : 'Create Event' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </transition>
+  </div>
+</template>
+
 <script setup>
 import { ref, onMounted } from 'vue'
 import { supabase } from '../../lib/supabase'
+import { useTheme } from '../../composables/useTheme'
+
+const { themeClasses } = useTheme()
 
 const events = ref([])
 const loading = ref(true)
@@ -18,6 +282,18 @@ const form = ref({
 })
 
 const toast = ref({ show: false, message: '', success: true })
+
+const openMenuId = ref(null)
+function toggleMenu(id) {
+  openMenuId.value = openMenuId.value === id ? null : id
+}
+function closeMenu() {
+  openMenuId.value = null
+}
+window.addEventListener('click', closeMenu)
+function stopMenuClick(e) {
+  e.stopPropagation()
+}
 
 function resetForm() {
   form.value = {
@@ -83,10 +359,10 @@ async function createEvent() {
       event_name: form.value.event_name,
       event_date: form.value.event_date,
       venue_name: form.value.venue_name,
-      max_tickets: form.value.max_tickets,
-      created_at: new Date().toISOString(),
+      max_tickets: form.value.max_tickets,      created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       is_active: false,
+      is_finished: false,
     })
   if (err) {
     showToast(err.message, false)
@@ -121,7 +397,19 @@ async function saveEvent() {
 // Set an event as the active/default event
 async function setActiveEvent(eventId) {
   error.value = ''
-  // message.value = ''
+  
+  // Check if the event is finished
+  const { data: eventData, error: checkErr } = await supabase
+    .from('event_config')
+    .select('is_finished')
+    .eq('id', eventId)
+    .single()
+    
+  if (checkErr || eventData?.is_finished) {
+    showToast('Cannot set a finished event as active.', false)
+    return
+  }
+  
   // Set all events to inactive, then set the selected one to active
   const { error: err1 } = await supabase
     .from('event_config')
@@ -132,11 +420,26 @@ async function setActiveEvent(eventId) {
     .update({ is_active: true })
     .eq('id', eventId)
   if (err1 || err2) {
-    // error.value = (err1?.message || '') + (err2?.message || '')
     showToast((err1?.message || '') + (err2?.message || ''), false)
   } else {
-    // message.value = 'Active event updated!'
     showToast('Active event updated!', true)
+    await fetchEvents()
+  }
+}
+
+async function finishEvent(eventId) {
+  const { error: err } = await supabase
+    .from('event_config')
+    .update({ 
+      is_active: false,
+      is_finished: true,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', eventId)
+  if (err) {
+    showToast('Failed to finish event: ' + err.message, false)
+  } else {
+    showToast('Event marked as finished!', true)
     await fetchEvents()
   }
 }
@@ -144,139 +447,7 @@ async function setActiveEvent(eventId) {
 onMounted(fetchEvents)
 </script>
 
-<template>
-  <div class="event-bg min-h-screen py-10 px-2">
-    <div v-if="toast.show" :class="['fixed top-6 left-1/2 z-50 px-6 py-3 rounded-lg shadow-lg text-base font-semibold transition-all', toast.success ? 'bg-green-600 text-white' : 'bg-red-600 text-white']" style="transform: translateX(-50%); min-width: 220px;">
-      {{ toast.message }}
-    </div>
-    <div class="max-w-4xl mx-auto">
-      <!-- Page Header -->
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-gray-700 mb-8">
-        <h1 class="text-3xl font-bold text-white mb-4 sm:mb-0 tracking-tight">Event Management</h1>
-        <button
-          @click="openCreateModal"
-          class="inline-flex items-center px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg shadow hover:bg-blue-700 transition-colors duration-200"
-        >
-          + Add Event
-        </button>
-      </div>
-
-      <!-- Loading -->
-      <div v-if="loading" class="text-center py-12 text-gray-400">Loading events...</div>
-
-      <!-- Event List -->
-      <div v-else>
-        <div class="mb-6">
-          <h2 class="text-xl font-semibold text-white mb-4">All Events</h2>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div
-              v-for="event in events"
-              :key="event.id"
-              class="bg-[#181f2a] rounded-xl shadow border border-gray-700 p-6 flex flex-col gap-2 hover:border-blue-500 transition relative"
-            >
-              <div class="flex items-center justify-between">
-                <div>
-                  <div class="text-lg font-bold text-blue-400 flex items-center gap-2">
-                    {{ event.event_name }}
-                  </div>
-                  <div class="text-sm text-gray-400">{{ formatDate(event.event_date) }}</div>
-                </div>
-                <div class="flex items-center gap-2 min-w-[110px] justify-end">
-                  <span
-                    v-if="event.is_active"
-                    class="px-2 py-0.5 rounded-full bg-green-600 text-xs text-white font-semibold"
-                    title="Active Event"
-                  >Active</span>
-                  <button
-                    v-if="!event.is_active"
-                    @click="setActiveEvent(event.id)"
-                    class="px-3 py-1 bg-green-600 text-white text-xs font-semibold rounded hover:bg-green-700 transition"
-                    title="Set as Active Event"
-                  >
-                    Set Active
-                  </button>
-                  <button
-                    @click="openEditModal(event)"
-                    class="px-3 py-1 bg-blue-500 text-white text-xs font-semibold rounded hover:bg-blue-600 transition"
-                    title="Edit Event"
-                  >
-                    Edit
-                  </button>
-                </div>
-              </div>
-              <div class="mt-2">
-                <div class="text-sm text-gray-300"><span class="font-semibold">Venue:</span> {{ event.venue_name }}</div>
-                <div class="text-sm text-gray-300"><span class="font-semibold">Max Tickets:</span> {{ event.max_tickets }}</div>
-                <div class="text-xs text-gray-500 mt-2">
-                  <span>Created: {{ formatDate(event.created_at) }}</span>
-                  <span v-if="event.updated_at"> | Updated: {{ formatDate(event.updated_at) }}</span>
-                </div>
-              </div>
-            </div>
-            <div v-if="events.length === 0" class="col-span-full text-center text-gray-500 py-8">
-              No events found.
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal for Create/Edit Event -->
-    <transition name="fade">
-      <div v-if="showModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-        <div class="bg-[#232b3b] rounded-xl max-w-md w-full shadow-2xl border border-blue-700 relative" @click.stop>
-          <!-- Modal Header -->
-          <div class="flex items-center justify-between p-6 border-b border-gray-700">
-            <h3 class="text-lg font-semibold text-white">
-              {{ isEditing ? 'Edit Event' : 'Add New Event' }}
-            </h3>
-            <button @click="closeModal" class="text-gray-400 hover:text-red-400 transition-colors duration-200">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <!-- Modal Body -->
-          <form @submit.prevent="isEditing ? saveEvent() : createEvent()" class="p-6 space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-300 mb-1">Event Name</label>
-              <input v-model="form.event_name" required class="w-full px-3 py-2 border border-gray-700 rounded bg-[#181f2a] text-white focus:ring focus:ring-blue-400/30" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-300 mb-1">Event Date</label>
-              <input v-model="form.event_date" type="date" required class="w-full px-3 py-2 border border-gray-700 rounded bg-[#181f2a] text-white focus:ring focus:ring-blue-400/30" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-300 mb-1">Venue Name</label>
-              <input v-model="form.venue_name" required class="w-full px-3 py-2 border border-gray-700 rounded bg-[#181f2a] text-white focus:ring focus:ring-blue-400/30" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-300 mb-1">Max Tickets</label>
-              <input v-model.number="form.max_tickets" type="number" min="1" required class="w-full px-3 py-2 border border-gray-700 rounded bg-[#181f2a] text-white focus:ring focus:ring-blue-400/30" />
-            </div>
-            <div class="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                @click="closeModal"
-                class="px-4 py-2 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition"
-              >Cancel</button>
-              <button
-                type="submit"
-                class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
-              >{{ isEditing ? 'Save Changes' : 'Create Event' }}</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </transition>
-  </div>
-</template>
-
 <style scoped>
-.event-bg {
-  background: linear-gradient(135deg, #181f2a 0%, #232b3b 100%);
-  min-height: 100vh;
-}
 .fade-enter-active, .fade-leave-active {
   transition: opacity 0.2s;
 }

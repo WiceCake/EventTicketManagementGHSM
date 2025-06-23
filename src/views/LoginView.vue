@@ -1,6 +1,7 @@
 <script setup>
-import { ref, onMounted, nextTick } from "vue";
-import logoImg from "../assets/ghsm-normal.svg";
+import { ref, onMounted, nextTick, computed } from "vue";
+import logoImgNormal from "../assets/ghsm-normal.svg";
+import logoImgInverted from "../assets/inverted-ghsm-logo.svg";
 import {
   UserIcon,
   KeyIcon,
@@ -10,10 +11,17 @@ import {
 } from "@heroicons/vue/24/solid";
 import { useRouter } from "vue-router";
 import { useAuth } from '../composables/useAuth';
+import { useTheme } from '../composables/useTheme';
 
 const showPassword = ref(false);
 const router = useRouter();
 const { signIn, isAuthenticated, loading } = useAuth();
+const { themeClasses, currentTheme } = useTheme();
+
+// Computed logo based on theme
+const logoSrc = computed(() => {
+  return currentTheme.value === 'dark' ? logoImgInverted : logoImgNormal;
+});
 
 // Toast state
 const toast = ref({ show: false, message: '', type: 'error' });
@@ -170,14 +178,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#181f2a] to-[#232b3b]">
-    <div class="flex flex-col items-center gap-5 shadow-lg p-10 bg-[#232b3b] rounded-lg max-w-md w-full mx-4">
-      <img class="w-16 h-16" :src="logoImg" alt="GREY Harmonics Logo" />
-      <h1 class="text-2xl font-bold text-white">Sign In</h1>
-
-      <!-- Toast Message (single source of error feedback) -->
+  <div :class="['flex items-center justify-center min-h-screen', themeClasses.pageBackground]">
+    <div :class="['flex flex-col items-center gap-5 shadow-lg p-10 rounded-lg max-w-md w-full mx-4', themeClasses.cardBackground, themeClasses.cardBorder]">      <img class="w-16 h-16" :src="logoSrc" alt="GREY Harmonics Logo" />
+      <h1 :class="['text-2xl font-bold', themeClasses.textPrimary]">Sign In</h1><!-- Toast Message (single source of error feedback) -->
       <transition name="fade">
-        <div v-if="toast.show" :class="['fixed top-6 left-1/2 z-50 transform -translate-x-1/2 px-6 py-3 rounded shadow-lg', toast.type === 'error' ? 'bg-red-800 text-red-100 border border-red-500' : 'bg-green-700 text-white']">
+        <div v-if="toast.show" :class="['fixed top-6 left-1/2 z-50 transform -translate-x-1/2 px-6 py-3 rounded shadow-lg', toast.type === 'error' ? themeClasses.statusError : themeClasses.statusSuccess]">
           {{ toast.message }}
         </div>
       </transition>
@@ -186,13 +191,12 @@ onMounted(() => {
         <!-- Username Field -->
         <label
           for="username"
-          class="block mb-2 text-sm font-medium text-gray-200"
+          :class="['block mb-2 text-sm font-medium', themeClasses.text]"
         >Username</label>
-        <div class="relative mb-6">
-          <div
-            class="absolute inset-y-0 start-0 flex items-center ps-3.5 pointer-events-none"
+        <div class="relative mb-6">          <div
+            class="absolute inset-y-0 start-0 flex items-center ps-3.5 pointer-events-none z-10"
           >
-            <UserIcon class="w-5 h-5 text-gray-400" />
+            <UserIcon :class="['w-5 h-5', themeClasses.iconPrimary]" />
           </div>
           <input
             v-model="username"
@@ -200,7 +204,11 @@ onMounted(() => {
             id="username"
             required
             autocomplete="username"
-            class="bg-[#181f2a] border border-gray-700 text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-10 p-2.5 placeholder-gray-500"
+            :class="[
+              'border text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-10 p-2.5',
+              themeClasses.input,
+              themeClasses.inputBorder
+            ]"
             placeholder="Enter your username"
           />
         </div>
@@ -208,13 +216,12 @@ onMounted(() => {
         <!-- Password Field -->
         <label
           for="password"
-          class="block mb-2 text-sm font-medium text-gray-200"
+          :class="['block mb-2 text-sm font-medium', themeClasses.text]"
         >Your Password</label>
-        <div class="relative mb-6">
-          <div
-            class="absolute inset-y-0 start-0 flex items-center ps-3.5 pointer-events-none"
+        <div class="relative mb-6">          <div
+            class="absolute inset-y-0 start-0 flex items-center ps-3.5 pointer-events-none z-10"
           >
-            <KeyIcon class="w-5 h-5 text-gray-400" />
+            <KeyIcon :class="['w-5 h-5', themeClasses.iconPrimary]" />
           </div>
           <input
             v-model="password"
@@ -222,26 +229,30 @@ onMounted(() => {
             id="password"
             required
             autocomplete="current-password"
-            class="bg-[#181f2a] border border-gray-700 text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-10 pe-10 p-2.5 placeholder-gray-500"
+            :class="[
+              'border text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-10 pe-10 p-2.5',
+              themeClasses.input,
+              themeClasses.inputBorder
+            ]"
             placeholder="*******"
-          />
-          <div
-            class="absolute inset-y-0 end-0 flex items-center pe-3.5 cursor-pointer"
+          />          <div
+            class="absolute inset-y-0 end-0 flex items-center pe-3.5 cursor-pointer z-10"
             @click="showPassword = !showPassword"
           >
-            <EyeIcon v-show="!showPassword" class="w-5 h-5 text-gray-400 hover:text-gray-200" />
+            <EyeIcon v-show="!showPassword" :class="['w-5 h-5 transition-colors hover:text-blue-400', themeClasses.iconPrimary]" />
             <EyeSlashIcon
               v-show="showPassword"
-              class="w-5 h-5 text-gray-400 hover:text-gray-200"
+              :class="['w-5 h-5 transition-colors hover:text-blue-400', themeClasses.iconPrimary]"
             />
           </div>
-        </div>
-
-        <!-- Submit Button -->
+        </div>        <!-- Submit Button -->
         <button
           type="submit"
           :disabled="isSubmitting || loading"
-          class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 w-full cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+          :class="[
+            'font-medium rounded-lg text-sm px-5 py-2.5 w-full cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200',
+            themeClasses.buttonPrimary
+          ]"
         >
           <span v-if="isSubmitting || loading" class="flex items-center justify-center">
             <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
@@ -252,10 +263,8 @@ onMounted(() => {
           </span>
           <span v-else>Sign In</span>
         </button>
-      </form>
-
-      <!-- Footer -->
-      <p class="text-xs text-gray-500 text-center mt-4">
+      </form>      <!-- Footer -->
+      <p :class="['text-xs text-center mt-4', themeClasses.textMuted]">
         &copy; 2025 Grey Harmonics School of Music
       </p>
     </div>

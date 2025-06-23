@@ -165,19 +165,21 @@ const userInitials = computed(() => {
           <span class="text-white font-bold text-sm">GH</span>
         </div>
       </div>
-    </div>    <!-- Navigation -->
-    <nav class="flex-1 px-3 py-6 space-y-1">
+    </div>
+
+    <!-- Navigation -->
+    <nav class="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
       <!-- Main Navigation -->
       <div class="space-y-1">
         <div v-if="!sidebarCollapsed" :class="['px-3 py-2 text-xs font-semibold uppercase tracking-wider', themeClasses.textMuted]">
           Navigation
-        </div>        <router-link
+        </div>
+        <router-link
           v-for="item in navigationItems"
           :key="item.path"
           :to="item.path"
           :class="[
-            'group flex items-center rounded-lg text-sm font-medium transition-all duration-200 relative',
-            sidebarCollapsed ? 'justify-center p-3' : 'gap-3 px-3 py-2',
+            'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative',
             isActiveRoute(item.path, item.exact) 
               ? themeClasses.navItemActive 
               : themeClasses.navItem
@@ -217,13 +219,13 @@ const userInitials = computed(() => {
         <div v-if="!sidebarCollapsed" :class="['px-3 py-2 text-xs font-semibold uppercase tracking-wider', themeClasses.textMuted]">
           Administration
         </div>
-        <div v-else class="border-t my-4" :class="themeClasses.cardBorder"></div>        <router-link
+        <div v-else class="border-t my-4" :class="themeClasses.cardBorder"></div>
+        <router-link
           v-for="item in adminItems"
           :key="item.path"
           :to="item.path"
           :class="[
-            'group flex items-center rounded-lg text-sm font-medium transition-all duration-200 relative',
-            sidebarCollapsed ? 'justify-center p-3' : 'gap-3 px-3 py-2',
+            'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative',
             isActiveRoute(item.path) 
               ? themeClasses.navItemActive 
               : themeClasses.navItem
@@ -348,5 +350,23 @@ const userInitials = computed(() => {
 /* Ensure tooltips appear above other elements */
 .group:hover .absolute {
   z-index: 9999;
+}
+
+/* Custom scrollbar for navigation */
+nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+nav::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5);
+  border-radius: 2px;
+}
+
+nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.7);
 }
 </style>

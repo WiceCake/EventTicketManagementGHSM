@@ -1,9 +1,12 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { supabase } from '../../lib/supabase'
-import { QrCodeIcon, CameraIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/vue/24/outline'
+import { useTheme } from '../../composables/useTheme'
+import { QrCodeIcon, CameraIcon, CheckCircleIcon, XCircleIcon, ClockIcon } from '@heroicons/vue/24/outline'
 import { QrcodeStream } from 'vue-qrcode-reader'
 // import { QrcodeStream } from 'vue3-qr-barcode-scanner'
+
+const { themeClasses } = useTheme()
 
 const isCameraActive = ref(false)
 const loading = ref(false)
@@ -20,11 +23,14 @@ const stats = ref({
 const activeEvent = ref(null)
 const toast = ref({ show: false, message: '', success: true })
 
+const canScan = computed(() => activeEvent.value && !activeEvent.value.is_finished)
+
 async function fetchActiveEvent() {
   const { data } = await supabase
     .from('event_config')
     .select('*')
     .eq('is_active', true)
+    .eq('is_finished', false)
     .maybeSingle()
   if (data) activeEvent.value = data
 }
@@ -93,12 +99,18 @@ function showToast(message, success = true) {
 
 // Process scanned or manually entered ticket
 async function processTicket(ticketInput) {
+  if (!activeEvent.value) {
+    showToast('No active event found. Cannot process tickets.', false)
+    return
+  }
+
   let ticket = null;
   // Try by manual_code first
   const { data: byCode } = await supabase
     .from('tickets')
     .select('*')
     .eq('manual_code', ticketInput)
+    .eq('event_id', activeEvent.value.id)
     .maybeSingle();
   if (byCode) {
     ticket = byCode;
@@ -108,6 +120,7 @@ async function processTicket(ticketInput) {
       .from('tickets')
       .select('*')
       .eq('id', ticketInput)
+      .eq('event_id', activeEvent.value.id)
       .maybeSingle();
     if (byId) ticket = byId;
   }
@@ -229,141 +242,235 @@ function onManualCodeInput(e) {
 }
 </script>
 
-<template>
-  <div class="event-bg min-h-screen py-10 px-2">
-    <div v-if="toast.show" :class="['fixed top-6 left-1/2 z-50 px-6 py-3 rounded-lg shadow-lg text-base font-semibold transition-all', toast.success ? 'bg-green-600 text-white' : 'bg-red-600 text-white']" style="transform: translateX(-50%); min-width: 220px;">
+<template>  <div :class="['min-h-screen py-8 px-4', themeClasses.pageBackground]">
+    <!-- Toast Notification -->
+    <div 
+      v-if="toast.show" 
+      :class="[
+        'fixed top-6 left-1/2 z-50 px-6 py-3 rounded-lg shadow-lg text-sm font-semibold transition-all transform -translate-x-1/2',
+        toast.success ? themeClasses.toastSuccess : themeClasses.toastError
+      ]"
+    >
       {{ toast.message }}
-    </div>
-    <div class="max-w-4xl mx-auto">
-      <div class="flex flex-col lg:flex-row gap-8">
+    </div>    <div class="max-w-7xl mx-auto">
+      <div class="flex flex-col xl:flex-row gap-8">
         <!-- Left: Scanner Section -->
-        <div class="w-full lg:w-[400px] flex-shrink-0">
-          <div class="bg-[#232b3b] rounded-2xl shadow-2xl border border-blue-700 p-8 flex flex-col gap-6 min-h-[520px]">
-            <div class="flex items-center justify-between mb-2">
-              <h1 class="text-3xl font-extrabold text-white tracking-tight">Scan Ticket</h1>
+        <div class="w-full xl:w-[440px] flex-shrink-0 mx-auto xl:mx-0">
+          <div :class="['rounded-2xl shadow-xl border p-6 space-y-6', themeClasses.card, themeClasses.cardBorder]">
+            <!-- Header -->
+            <div class="flex items-center justify-between">
+              <h1 :class="['text-2xl font-bold tracking-tight', themeClasses.textPrimary]">
+                <QrCodeIcon class="w-8 h-8 inline-block mr-2 -mt-1" />
+                Ticket Scanner
+              </h1>
               <button
                 @click="toggleCamera"
-                :disabled="loading"
-                :class="[ 'px-5 py-2 rounded-lg font-semibold text-base transition-colors duration-200',
-                  isCameraActive 
-                    ? 'bg-red-600 hover:bg-red-700 text-white' 
-                    : 'bg-blue-600 hover:bg-blue-700 text-white',
+                :disabled="loading || !canScan"
+                :class="[
+                  'px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 shadow-sm',
+                  !canScan 
+                    ? themeClasses.paginationButtonDisabled
+                    : isCameraActive 
+                    ? themeClasses.buttonDanger
+                    : themeClasses.buttonPrimary,
                   loading && 'opacity-50 cursor-not-allowed'
                 ]"
               >
+                <CameraIcon class="w-4 h-4 inline-block mr-2" />
                 <span v-if="loading">Loading...</span>
-                <span v-else>{{ isCameraActive ? 'Stop Camera' : 'Start Camera' }}</span>
+                <span v-else-if="!canScan">No Event</span>
+                <span v-else>{{ isCameraActive ? 'Stop' : 'Start' }}</span>
               </button>
             </div>
-            <!-- Camera Container -->
-            <div class="relative bg-[#181f2a] rounded-xl overflow-hidden mb-2 border border-blue-900 flex items-center justify-center" style="min-height:340px; height:340px;">
+
+            <!-- Event Status -->
+            <div v-if="!canScan" :class="['p-4 rounded-lg border', themeClasses.statusWarning]">
+              <p class="text-sm font-medium">
+                {{ !activeEvent 
+                    ? 'No active event found. Please set an event as active before scanning.' 
+                    : 'This event has finished. Scanning is no longer available.' 
+                }}
+              </p>
+            </div>            <!-- Camera Container -->
+            <div :class="[
+              'relative rounded-xl overflow-hidden border-2',
+              'w-full max-w-[380px] h-[300px] md:h-[320px] lg:h-[340px] mx-auto',
+              canScan ? themeClasses.cameraActive : themeClasses.cameraInactive
+            ]">
               <QrcodeStream
-                v-if="isCameraActive"
+                v-if="isCameraActive && canScan"
                 @detect="onDetect"
                 :paused="processing"
-                class="w-full h-full max-w-[480px] max-h-[340px] aspect-video"
+                class="w-full h-full object-cover rounded-lg"
               />
-              <div v-else class="w-full h-full aspect-video flex items-center justify-center text-gray-500" style="min-height:340px; height:340px;">
-                <div class="text-center">
-                  <CameraIcon class="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                  <p class="text-lg font-medium text-gray-300">Camera Inactive</p>
-                  <p class="text-sm text-gray-500">Click "Start Camera" to begin scanning</p>
+              <div v-else class="w-full h-full flex items-center justify-center">
+                <div :class="['text-center', themeClasses.textMuted]">
+                  <CameraIcon :class="['w-20 h-20 mx-auto mb-4', themeClasses.textMuted]" />
+                  <p :class="['text-xl font-semibold mb-3', themeClasses.textPrimary]">
+                    {{ !canScan ? 'Scanner Unavailable' : 'Camera Inactive' }}
+                  </p>
+                  <p class="text-sm max-w-xs mx-auto leading-relaxed">
+                    {{ !canScan 
+                        ? 'Set an active event to enable scanning'
+                        : 'Click "Start" to begin scanning tickets'
+                    }}
+                  </p>
                 </div>
               </div>
+              
+              <!-- Scanning Overlay -->
+              <div v-if="isCameraActive && canScan" class="absolute inset-0 pointer-events-none">
+                <div :class="[
+                  'absolute inset-8 border-2 rounded-lg shadow-lg',
+                  'border-white/90 dark:border-white/70'
+                ]">
+                  <div :class="[
+                    'absolute top-0 left-0 w-6 h-6 border-l-4 border-t-4',
+                    'border-green-400 dark:border-green-500'
+                  ]"></div>
+                  <div :class="[
+                    'absolute top-0 right-0 w-6 h-6 border-r-4 border-t-4',
+                    'border-green-400 dark:border-green-500'
+                  ]"></div>
+                  <div :class="[
+                    'absolute bottom-0 left-0 w-6 h-6 border-l-4 border-b-4',
+                    'border-green-400 dark:border-green-500'
+                  ]"></div>
+                  <div :class="[
+                    'absolute bottom-0 right-0 w-6 h-6 border-r-4 border-b-4',
+                    'border-green-400 dark:border-green-500'
+                  ]"></div>
+                </div>
+                <div :class="[
+                  'absolute top-1/2 left-0 right-0 h-0.5 animate-scan opacity-80',
+                  'bg-red-500 dark:bg-red-400'
+                ]"></div>
+              </div>
             </div>
-            <!-- Manual Input -->
-            <div>
-              <input
-                v-model="manualTicketId"
-                type="text"
-                placeholder="Enter ticket ID manually"
-                class="w-full px-4 py-2 border border-gray-700 rounded-md text-base bg-[#181f2a] text-white focus:ring-blue-500 focus:border-blue-500"
-                @keyup.enter="processManualTicket"
-                :disabled="processing"
-                @input="onManualCodeInput"
-              />
-              <button
-                @click="processManualTicket"
-                :disabled="!manualTicketId.trim() || processing"
-                class="w-full mt-3 px-4 py-2 bg-blue-600 text-white text-base rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
-              >
-                Process
-              </button>
-            </div>
-            <!-- Scan Result (removed persistent card) -->
-          </div>
-        </div>
 
-        <!-- Right: Stats and Recent Scans -->
-        <div class="w-full flex-1 flex flex-col gap-6">
-          <!-- Stats Cards -->
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div class="bg-[#181f2a] rounded-2xl shadow border-2 border-blue-700 p-5 flex items-center min-h-[90px]">
-              <div class="p-2 rounded-full bg-blue-900">
-                <QrCodeIcon class="w-6 h-6 text-blue-400" />
-              </div>
-              <div class="ml-3">
-                <p class="text-xs font-medium text-blue-300">Total Scanned</p>
-                <p class="text-xl font-extrabold text-white">{{ stats.totalScanned }}</p>
-              </div>
-            </div>
-            <div class="bg-[#181f2a] rounded-2xl shadow border-2 border-green-700 p-5 flex items-center min-h-[90px]">
-              <div class="p-2 rounded-full bg-green-900">
-                <CheckCircleIcon class="w-6 h-6 text-green-400" />
-              </div>
-              <div class="ml-3">
-                <p class="text-xs font-medium text-green-300">Valid Tickets</p>
-                <p class="text-xl font-extrabold text-white">{{ stats.validTickets }}</p>
-              </div>
-            </div>
-            <div class="bg-[#181f2a] rounded-2xl shadow border-2 border-red-700 p-5 flex items-center min-h-[90px]">
-              <div class="p-2 rounded-full bg-red-900">
-                <XCircleIcon class="w-6 h-6 text-red-400" />
-              </div>
-              <div class="ml-3">
-                <p class="text-xs font-medium text-red-300">Invalid Tickets</p>
-                <p class="text-xl font-extrabold text-white">{{ stats.invalidTickets }}</p>
+            <!-- Manual Input -->
+            <div class="space-y-3">
+              <label :class="['block text-sm font-medium', themeClasses.textSecondary]">
+                Manual Ticket Entry
+              </label>
+              <div class="flex gap-3">                <input
+                  v-model="manualTicketId"
+                  type="text"
+                  placeholder="Enter ticket ID"
+                  :class="[
+                    'flex-1 px-4 py-3 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg',
+                    themeClasses.input
+                  ]"
+                  @keyup.enter="processManualTicket"
+                  :disabled="processing || !canScan"
+                  @input="onManualCodeInput"
+                />
+                <button
+                  @click="processManualTicket"
+                  :disabled="!manualTicketId.trim() || processing || !canScan"
+                  :class="[
+                    'px-4 py-2 text-sm rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm',
+                    themeClasses.buttonPrimary
+                  ]"
+                >
+                  Process
+                </button>
               </div>
             </div>
           </div>
-          <!-- Recent Scans -->
-          <div class="bg-[#181f2a] rounded-2xl shadow border-2 border-blue-700 p-6 flex-1 flex flex-col">
-            <h2 class="text-xl font-bold text-white mb-4">Recent Scans</h2>
-            <div class="space-y-3 max-h-80 overflow-y-auto flex-1">
-              <div
-                v-for="scan in recentScans"
-                :key="scan.id"
-                :class=" [
-                  'p-4 rounded-lg border text-base',
-                  scan.success 
-                    ? 'bg-green-50 border-green-200' 
-                    : 'bg-red-50 border-red-200'
-                ]"
-              >
-                <div class="flex justify-between items-start">
-                  <div>
-                    <p class="font-semibold text-gray-900">{{ scan.ticketId }}</p>
-                    <p v-if="scan.attendeeName" class="text-gray-600">{{ scan.attendeeName }}</p>
-                  </div>
-                  <div class="text-right">
-                    <div
-                      :class=" [
-                        'inline-flex items-center px-3 py-1 rounded-full text-xs font-bold',
-                        scan.success 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      ]"
-                    >
-                      {{ scan.success ? 'Valid' : 'Invalid' }}
-                    </div>
-                    <p class="text-xs text-gray-500 mt-1">{{ formatTime(scan.timestamp) }}</p>
-                  </div>
+        </div>        <!-- Right: Stats and Recent Scans -->
+        <div class="w-full flex-1 space-y-6 min-w-0"><!-- Stats Cards -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div :class="['rounded-xl shadow-lg border p-6 transition-all hover:shadow-xl', themeClasses.card, themeClasses.cardBorder]">
+              <div class="flex items-center">
+                <div class="p-3 rounded-full bg-blue-600 shadow-lg">
+                  <QrCodeIcon class="w-6 h-6 text-white" />
+                </div>
+                <div class="ml-4">
+                  <p class="text-xs font-semibold uppercase tracking-wide text-blue-600">Total Scanned</p>
+                  <p :class="['text-2xl font-bold', themeClasses.textPrimary]">{{ stats.totalScanned }}</p>
                 </div>
               </div>
-              <div v-if="recentScans.length === 0" class="text-center py-12 text-gray-500">
-                <QrCodeIcon class="w-14 h-14 mx-auto mb-3 text-gray-300" />
-                <p class="text-lg">No scans yet</p>
-                <p class="text-base">Scan tickets will appear here</p>
+            </div>
+            
+            <div :class="['rounded-xl shadow-lg border p-6 transition-all hover:shadow-xl', themeClasses.card, themeClasses.cardBorder]">
+              <div class="flex items-center">
+                <div class="p-3 rounded-full bg-green-600 shadow-lg">
+                  <CheckCircleIcon class="w-6 h-6 text-white" />
+                </div>
+                <div class="ml-4">
+                  <p class="text-xs font-semibold uppercase tracking-wide text-green-600">Valid Tickets</p>
+                  <p :class="['text-2xl font-bold', themeClasses.textPrimary]">{{ stats.validTickets }}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div :class="['rounded-xl shadow-lg border p-6 transition-all hover:shadow-xl', themeClasses.card, themeClasses.cardBorder]">
+              <div class="flex items-center">
+                <div class="p-3 rounded-full bg-red-600 shadow-lg">
+                  <XCircleIcon class="w-6 h-6 text-white" />
+                </div>
+                <div class="ml-4">
+                  <p class="text-xs font-semibold uppercase tracking-wide text-red-600">Invalid Attempts</p>
+                  <p :class="['text-2xl font-bold', themeClasses.textPrimary]">{{ stats.invalidTickets }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent Scans -->
+          <div :class="['rounded-xl shadow-lg border flex-1 flex flex-col', themeClasses.card, themeClasses.cardBorder]">
+            <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+              <h2 :class="['text-xl font-bold flex items-center', themeClasses.textPrimary]">
+                <ClockIcon class="w-5 h-5 mr-2" />
+                Recent Activity
+              </h2>
+            </div>
+            
+            <div class="flex-1 p-6">
+              <div v-if="!canScan" :class="['text-center py-12', themeClasses.textMuted]">
+                <QrCodeIcon :class="['w-12 h-12 mx-auto mb-3 opacity-50', themeClasses.textMuted]" />
+                <p class="text-lg font-medium">No Active Event</p>
+                <p class="text-sm">Set an active event to view scan history</p>
+              </div>
+              
+              <div v-else-if="recentScans.length === 0" :class="['text-center py-12', themeClasses.textMuted]">
+                <QrCodeIcon :class="['w-12 h-12 mx-auto mb-3 opacity-50', themeClasses.textMuted]" />
+                <p class="text-lg font-medium">No Recent Scans</p>
+                <p class="text-sm">Scanned tickets will appear here</p>
+              </div>
+              
+              <div v-else class="space-y-3 max-h-80 overflow-y-auto">
+                <div
+                  v-for="scan in recentScans"
+                  :key="scan.id"
+                  :class="[
+                    'p-4 rounded-lg border transition-all hover:shadow-md',
+                    scan.success 
+                      ? themeClasses.statusSuccess
+                      : themeClasses.statusError
+                  ]"
+                >
+                  <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                      <p :class="['font-semibold text-sm', themeClasses.textPrimary]">{{ scan.ticketId }}</p>
+                      <p v-if="scan.attendeeName" :class="['text-sm mt-1', themeClasses.textMuted]">{{ scan.attendeeName }}</p>
+                    </div>
+                    <div class="text-right">
+                      <div
+                        :class="[
+                          'inline-flex items-center px-2 py-1 rounded-full text-xs font-bold shadow-sm',
+                          scan.success 
+                            ? themeClasses.badgeSuccess
+                            : themeClasses.badgeDanger
+                        ]"
+                      >
+                        {{ scan.success ? 'Valid' : 'Invalid' }}
+                      </div>
+                      <p :class="['text-xs mt-1 font-medium', themeClasses.textMuted]">{{ formatTime(scan.timestamp) }}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -374,20 +481,40 @@ function onManualCodeInput(e) {
 </template>
 
 <style scoped>
-.event-bg {
-  background: linear-gradient(135deg, #181f2a 0%, #232b3b 100%);
-  min-height: 100vh;
-}
 @keyframes scan {
-  0% { top: 0; }
-  50% { top: calc(100% - 4px); }
-  100% { top: 0; }
+  0% { 
+    transform: translateY(0); 
+    opacity: 0.7; 
+  }
+  50% { 
+    transform: translateY(calc(100% - 2px)); 
+    opacity: 1; 
+  }
+  100% { 
+    transform: translateY(0); 
+    opacity: 0.7; 
+  }
 }
+
 .animate-scan {
   animation: scan 2s ease-in-out infinite;
 }
-.overflow-y-auto::-webkit-scrollbar { width: 4px; }
-.overflow-y-auto::-webkit-scrollbar-track { background: #232b3b; border-radius: 2px; }
-.overflow-y-auto::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
-.overflow-y-auto::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+.overflow-y-auto::-webkit-scrollbar { 
+  width: 4px; 
+}
+
+.overflow-y-auto::-webkit-scrollbar-track { 
+  background: transparent; 
+  border-radius: 2px; 
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb { 
+  background: rgba(156, 163, 175, 0.5); 
+  border-radius: 2px; 
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb:hover { 
+  background: rgba(156, 163, 175, 0.7); 
+}
 </style>
