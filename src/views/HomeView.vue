@@ -43,22 +43,34 @@ async function fetchStats() {
 
   // Only fetch ticket stats if there's an active event
   if (event) {
-    const { data: ticketStats } = await supabase
-      .from('ticket_stats')
-      .select('*')
-      .maybeSingle()
-    if (ticketStats) {
+    // Fetch tickets directly from the tickets table for this event
+    const { data: tickets } = await supabase
+      .from('tickets')
+      .select('status, ticket_type')
+      .eq('event_id', event.id)
+
+    if (tickets) {
+      // Calculate stats from actual ticket data
+      const total = tickets.length
+      const unclaimed = tickets.filter(t => t.status === 'unclaimed').length
+      const claimed = tickets.filter(t => t.status === 'claimed').length
+      const scanned = tickets.filter(t => t.status === 'scanned').length
+      const recitalist = tickets.filter(t => t.ticket_type === 'recitalist').length
+      const guest = tickets.filter(t => t.ticket_type === 'guest').length
+      const distributed = claimed + scanned
+      const remaining = event.max_tickets - total
+
       stats.value = {
         ...stats.value,
-        total: ticketStats.total_tickets,
-        unclaimed: ticketStats.unclaimed_tickets,
-        claimed: ticketStats.claimed_tickets,
-        scanned: ticketStats.scanned_tickets,
-        recitalist: ticketStats.recitalist_tickets,
-        guest: ticketStats.guest_tickets,
-        distributed: ticketStats.tickets_distributed,
-        remaining: ticketStats.remaining_tickets,
-        max: ticketStats.max_tickets,
+        total: total,
+        unclaimed: unclaimed,
+        claimed: claimed,
+        scanned: scanned,
+        recitalist: recitalist,
+        guest: guest,
+        distributed: distributed,
+        remaining: Math.max(0, remaining),
+        max: event.max_tickets,
         event: event,
       }
     }
@@ -80,12 +92,32 @@ async function fetchStats() {
 }
 
 async function fetchRecentLogs() {
-  const { data } = await supabase
-    .from('ticket_logs')
-    .select('*, users: user_id (full_name, email), tickets: ticket_id (name)')
-    .order('created_at', { ascending: false })
-    .limit(5)
-  recentLogs.value = data || []
+  // Get active event first
+  const { data: event } = await supabase
+    .from('event_config')
+    .select('id')
+    .eq('is_active', true)
+    .eq('is_finished', false)
+    .maybeSingle()
+
+  if (event) {
+    // Fetch logs only for the active event
+    const { data } = await supabase
+      .from('ticket_logs')
+      .select('*, users: user_id (full_name, email), tickets: ticket_id (name, event_id)')
+      .eq('tickets.event_id', event.id)
+      .order('created_at', { ascending: false })
+      .limit(5)
+    recentLogs.value = data || []
+  } else {
+    // No active event, show general recent logs
+    const { data } = await supabase
+      .from('ticket_logs')
+      .select('*, users: user_id (full_name, email), tickets: ticket_id (name)')
+      .order('created_at', { ascending: false })
+      .limit(5)
+    recentLogs.value = data || []
+  }
 }
 
 onMounted(() => {

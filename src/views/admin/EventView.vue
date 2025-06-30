@@ -312,9 +312,12 @@ function openCreateModal() {
 }
 
 function openEditModal(event) {
+  // Format date for HTML date input (YYYY-MM-DD)
+  const eventDate = event.event_date ? new Date(event.event_date).toISOString().split('T')[0] : ''
+  
   form.value = {
     event_name: event.event_name,
-    event_date: event.event_date,
+    event_date: eventDate,
     venue_name: event.venue_name,
     max_tickets: event.max_tickets,
   }
