@@ -22,6 +22,8 @@ const message = ref('')
 const activeEvent = ref(null)
 const showModal = ref(false)
 const isBatch = ref(false)
+const isSubmitting = ref(false) // For preventing double submissions
+const isUploading = ref(false) // For CSV upload loading
 const form = ref({
   recitalist_name: '',
   guest_count: 0,
@@ -135,6 +137,8 @@ function generateManualCode(length = 7) {
 }
 
 async function addRecitalist() {
+  if (isSubmitting.value) return // Prevent double submission
+  
   error.value = ''
   message.value = ''
   if (!activeEvent.value) {
@@ -145,65 +149,74 @@ async function addRecitalist() {
     showToast('Recitalist name is required.', false)
     return
   }
-  // Generate unique manual code for recitalist
-  let manualCode = generateManualCode();
-  let exists = true;
-  while (exists) {
-    const { data: existing } = await supabase.from('tickets').select('id').eq('manual_code', manualCode).maybeSingle();
-    if (!existing) exists = false;
-    else manualCode = generateManualCode();
-  }
-  // Insert recitalist ticket
-  const { data: recitalist, error: err1 } = await supabase
-    .from('tickets')
-    .insert({
-      event_id: activeEvent.value.id,
-      ticket_type: recitalistType,
-      name: form.value.recitalist_name,
-      created_by_name: form.value.recitalist_name,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      manual_code: manualCode
-    })
-    .select()
-    .single()
-  if (err1) {
-    showToast(err1.message, false)
-    return
-  }
-  // Insert guest tickets
-  let guestTickets = []
-  if (form.value.guest_count > 0) {
-    let guestInserts = [];
-    for (let i = 0; i < form.value.guest_count; i++) {
-      // Generate unique manual code for each guest
-      let guestCode = generateManualCode();
-      let guestExists = true;
-      while (guestExists) {
-        const { data: existing } = await supabase.from('tickets').select('id').eq('manual_code', guestCode).maybeSingle();
-        if (!existing) guestExists = false;
-        else guestCode = generateManualCode();
-      }
-      guestInserts.push({
+  
+  isSubmitting.value = true
+  
+  try {
+    // Generate unique manual code for recitalist
+    let manualCode = generateManualCode();
+    let exists = true;
+    while (exists) {
+      const { data: existing } = await supabase.from('tickets').select('id').eq('manual_code', manualCode).maybeSingle();
+      if (!existing) exists = false;
+      else manualCode = generateManualCode();
+    }
+    // Insert recitalist ticket
+    const { data: recitalist, error: err1 } = await supabase
+      .from('tickets')
+      .insert({
         event_id: activeEvent.value.id,
-        ticket_type: guestType,
-        name: null,
+        ticket_type: recitalistType,
+        name: form.value.recitalist_name,
         created_by_name: form.value.recitalist_name,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        manual_code: guestCode
-      });
-    }
-    const { error: err2 } = await supabase.from('tickets').insert(guestInserts)
-    if (err2) {
-      showToast(err2.message, false)
+        manual_code: manualCode
+      })
+      .select()
+      .single()
+    if (err1) {
+      showToast(err1.message, false)
       return
     }
-    guestTickets = guestInserts
+    // Insert guest tickets
+    let guestTickets = []
+    if (form.value.guest_count > 0) {
+      let guestInserts = [];
+      for (let i = 0; i < form.value.guest_count; i++) {
+        // Generate unique manual code for each guest
+        let guestCode = generateManualCode();
+        let guestExists = true;
+        while (guestExists) {
+          const { data: existing } = await supabase.from('tickets').select('id').eq('manual_code', guestCode).maybeSingle();
+          if (!existing) guestExists = false;
+          else guestCode = generateManualCode();
+        }
+        guestInserts.push({
+          event_id: activeEvent.value.id,
+          ticket_type: guestType,
+          name: null,
+          created_by_name: form.value.recitalist_name,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          manual_code: guestCode
+        });
+      }
+      const { error: err2 } = await supabase.from('tickets').insert(guestInserts)
+      if (err2) {
+        showToast(err2.message, false)
+        return
+      }
+      guestTickets = guestInserts
+    }
+    showToast(`Recitalist and ${guestTickets.length} guest ticket(s) added!`, true)
+    closeModal()
+    await fetchTickets()
+  } catch (error) {
+    showToast('Failed to add recitalist: ' + error.message, false)
+  } finally {
+    isSubmitting.value = false
   }
-  showToast(`Recitalist and ${guestTickets.length} guest ticket(s) added!`, true)
-  closeModal()
-  await fetchTickets()
 }
 
 function parseCSV(text) {
@@ -220,68 +233,81 @@ function parseCSV(text) {
 }
 
 async function handleCSVUpload(e) {
+  if (isUploading.value) return // Prevent double upload
+  
   error.value = ''
   message.value = ''
   const file = e.target.files[0]
   if (!file) return
-  const text = await file.text()
-  const rows = parseCSV(text)
-  if (!rows.length) {
-    showToast('CSV is empty or invalid.', false)
-    return
-  }
-  if (!activeEvent.value) {
-    showToast('No active event set.', false)
-    return
-  }
-  // Insert all tickets in batch
-  let allTickets = []
-  for (const row of rows) {
-    // Recitalist ticket
-    let manualCode = generateManualCode();
-    let exists = true;
-    while (exists) {
-      const { data: existing } = await supabase.from('tickets').select('id').eq('manual_code', manualCode).maybeSingle();
-      if (!existing) exists = false;
-      else manualCode = generateManualCode();
+  
+  isUploading.value = true
+  
+  try {
+    const text = await file.text()
+    const rows = parseCSV(text)
+    if (!rows.length) {
+      showToast('CSV is empty or invalid.', false)
+      return
     }
-    allTickets.push({
-      event_id: activeEvent.value.id,
-      ticket_type: recitalistType,
-      name: row.recitalist_name,
-      created_by_name: row.recitalist_name,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      manual_code: manualCode
-    })
-    // Guest tickets
-    for (let i = 0; i < row.guest_count; i++) {
-      let guestCode = generateManualCode();
-      let guestExists = true;
-      while (guestExists) {
-        const { data: existing } = await supabase.from('tickets').select('id').eq('manual_code', guestCode).maybeSingle();
-        if (!existing) guestExists = false;
-        else guestCode = generateManualCode();
+    if (!activeEvent.value) {
+      showToast('No active event set.', false)
+      return
+    }
+    // Insert all tickets in batch
+    let allTickets = []
+    for (const row of rows) {
+      // Recitalist ticket
+      let manualCode = generateManualCode();
+      let exists = true;
+      while (exists) {
+        const { data: existing } = await supabase.from('tickets').select('id').eq('manual_code', manualCode).maybeSingle();
+        if (!existing) exists = false;
+        else manualCode = generateManualCode();
       }
       allTickets.push({
         event_id: activeEvent.value.id,
-        ticket_type: guestType,
-        name: null,
+        ticket_type: recitalistType,
+        name: row.recitalist_name,
         created_by_name: row.recitalist_name,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        manual_code: guestCode
+        manual_code: manualCode
       })
+      // Guest tickets
+      for (let i = 0; i < row.guest_count; i++) {
+        let guestCode = generateManualCode();
+        let guestExists = true;
+        while (guestExists) {
+          const { data: existing } = await supabase.from('tickets').select('id').eq('manual_code', guestCode).maybeSingle();
+          if (!existing) guestExists = false;
+          else guestCode = generateManualCode();
+        }
+        allTickets.push({
+          event_id: activeEvent.value.id,
+          ticket_type: guestType,
+          name: null,
+          created_by_name: row.recitalist_name,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          manual_code: guestCode
+        })
+      }
     }
+    const { error: err } = await supabase.from('tickets').insert(allTickets)
+    if (err) {
+      showToast(err.message, false)
+      return
+    }
+    showToast(`Batch upload successful! ${rows.length} recitalists added.`, true)
+    closeModal()
+    await fetchTickets()
+  } catch (error) {
+    showToast('Failed to upload CSV: ' + error.message, false)
+  } finally {
+    isUploading.value = false
+    // Reset file input
+    e.target.value = ''
   }
-  const { error: err } = await supabase.from('tickets').insert(allTickets)
-  if (err) {
-    showToast(err.message, false)
-    return
-  }
-  showToast(`Batch upload successful! ${rows.length} recitalists added.`, true)
-  closeModal()
-  await fetchTickets()
 }
 
 // QR Preview
@@ -485,6 +511,20 @@ const claimerName = ref('')
 const ticketsToClaim = ref([])
 const claimMode = ref('single') // or 'batch'
 
+// Edit ticket functionality
+const showEditModal = ref(false)
+const editingGroup = ref(null)
+const editForm = ref({
+  recitalist_name: '',
+  guest_tickets: []
+})
+const newGuestCount = ref(0)
+
+// Delete confirmation modal
+const showDeleteModal = ref(false)
+const groupToDelete = ref(null)
+const deleteConfirmText = ref('')
+
 function cancelClaim() {
   showClaimerPrompt.value = false
   claimerName.value = ''
@@ -546,6 +586,180 @@ function showToast(message, success = true) {
 
 function showMessage(msg, type = 'success') {
   toast(msg, { type })
+}
+
+// Edit ticket functions
+function openEditModal(group) {
+  editingGroup.value = group
+  editForm.value = {
+    recitalist_name: group.recitalist.name,
+    guest_tickets: [...group.guests] // Create a copy
+  }
+  newGuestCount.value = 0
+  showEditModal.value = true
+}
+
+function closeEditModal() {
+  showEditModal.value = false
+  editingGroup.value = null
+  editForm.value = {
+    recitalist_name: '',
+    guest_tickets: []
+  }
+  newGuestCount.value = 0
+}
+
+async function deleteGuestTicket(guestTicket) {
+  if (!confirm('Are you sure you want to delete this guest ticket?')) return
+  
+  const { error } = await supabase
+    .from('tickets')
+    .delete()
+    .eq('id', guestTicket.id)
+  
+  if (error) {
+    showToast(error.message, false)
+    return
+  }
+  
+  // Remove from local form
+  editForm.value.guest_tickets = editForm.value.guest_tickets.filter(t => t.id !== guestTicket.id)
+  showToast('Guest ticket deleted successfully', true)
+}
+
+async function addGuestTickets() {
+  if (newGuestCount.value <= 0) return
+  
+  const guestInserts = []
+  for (let i = 0; i < newGuestCount.value; i++) {
+    // Generate unique manual code for each guest
+    let guestCode = generateManualCode()
+    let guestExists = true
+    while (guestExists) {
+      const { data: existing } = await supabase.from('tickets').select('id').eq('manual_code', guestCode).maybeSingle()
+      if (!existing) guestExists = false
+      else guestCode = generateManualCode()
+    }
+    
+    guestInserts.push({
+      event_id: activeEvent.value.id,
+      ticket_type: guestType,
+      name: null,
+      created_by_name: editForm.value.recitalist_name,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      manual_code: guestCode
+    })
+  }
+  
+  const { data: newGuests, error } = await supabase
+    .from('tickets')
+    .insert(guestInserts)
+    .select()
+  
+  if (error) {
+    showToast(error.message, false)
+    return
+  }
+  
+  // Add to local form
+  editForm.value.guest_tickets.push(...newGuests)
+  newGuestCount.value = 0
+  showToast(`${newGuests.length} guest tickets added successfully`, true)
+}
+
+async function updateRecitalistName() {
+  if (!editForm.value.recitalist_name.trim()) {
+    showToast('Recitalist name cannot be empty', false)
+    return
+  }
+  
+  const { error } = await supabase
+    .from('tickets')
+    .update({
+      name: editForm.value.recitalist_name,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', editingGroup.value.recitalist.id)
+  
+  if (error) {
+    showToast(error.message, false)
+    return
+  }
+  
+  // Also update all guest tickets' created_by_name
+  const guestIds = editForm.value.guest_tickets.map(t => t.id)
+  if (guestIds.length > 0) {
+    await supabase
+      .from('tickets')
+      .update({
+        created_by_name: editForm.value.recitalist_name,
+        updated_at: new Date().toISOString()
+      })
+      .in('id', guestIds)
+  }
+  
+  showToast('Recitalist name updated successfully', true)
+}
+
+async function saveChanges() {
+  await updateRecitalistName()
+  await fetchTickets() // Refresh the ticket list
+  closeEditModal()
+}
+
+// Delete recitalist and all their guests
+async function deleteRecitalistGroup(group) {
+  groupToDelete.value = group
+  showDeleteModal.value = true
+}
+
+async function confirmDeleteRecitalist() {
+  if (!groupToDelete.value) return
+  
+  const group = groupToDelete.value
+  const recitalistName = group.recitalist.name
+  const totalTickets = 1 + group.guests.length
+  
+  try {
+    // Get all ticket IDs (recitalist + guests)
+    const allTicketIds = [group.recitalist.id, ...group.guests.map(g => g.id)]
+    
+    // First, delete all related ticket_logs to avoid foreign key constraint issues
+    const { error: logsError } = await supabase
+      .from('ticket_logs')
+      .delete()
+      .in('ticket_id', allTicketIds)
+    
+    if (logsError) {
+      console.warn('Error deleting ticket logs:', logsError.message)
+      // Continue anyway, as logs might not exist
+    }
+    
+    // Then delete all tickets
+    const { error: ticketsError } = await supabase
+      .from('tickets')
+      .delete()
+      .in('id', allTicketIds)
+    
+    if (ticketsError) {
+      showToast('Failed to delete tickets: ' + ticketsError.message, false)
+      return
+    }
+    
+    showToast(`Successfully deleted "${recitalistName}" and ${group.guests.length} guest tickets`, true)
+    await fetchTickets() // Refresh the list
+    closeDeleteModal()
+    
+  } catch (error) {
+    showToast('Error deleting recitalist group: ' + error.message, false)
+  }
+}
+
+function closeDeleteModal() {
+  showDeleteModal.value = false
+  groupToDelete.value = null
+  deleteConfirmText.value = ''
 }
 
 function downloadCSVTemplate() {
@@ -701,6 +915,24 @@ const { themeClasses } = useTheme()
                   >
                     QR Preview
                   </button>
+                  <button
+                    @click="openEditModal(group)"
+                    :class="[
+                      'px-3 py-1 text-xs font-semibold rounded transition shadow',
+                      themeClasses.buttonSecondary
+                    ]"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    @click="deleteRecitalistGroup(group)"
+                    :class="[
+                      'px-3 py-1 text-xs font-semibold rounded transition shadow',
+                      'bg-red-500 hover:bg-red-600 text-white'
+                    ]"
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             </div>
@@ -785,11 +1017,23 @@ const { themeClasses } = useTheme()
               <button
                 type="button"
                 @click="closeModal"
-                :class="[themeClasses.buttonSecondary, 'px-4 py-2 rounded transition-colors']"
-              >Cancel</button>              <button
+                :disabled="isSubmitting"
+                :class="[themeClasses.buttonSecondary, 'px-4 py-2 rounded transition-colors disabled:opacity-50']"
+              >Cancel</button>
+              <button
                 type="submit"
-                :class="[themeClasses.buttonPrimary, 'px-4 py-2 rounded transition-colors']"
-              >Add</button>
+                :disabled="isSubmitting"
+                :class="[
+                  themeClasses.buttonPrimary, 
+                  'px-4 py-2 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2'
+                ]"
+              >
+                <svg v-if="isSubmitting" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                {{ isSubmitting ? 'Adding...' : 'Add' }}
+              </button>
             </div>
           </form>
           <form v-else class="p-6 space-y-4">
@@ -804,14 +1048,28 @@ const { themeClasses } = useTheme()
               >
                 Download CSV Template
               </button>
-              <input type="file" accept=".csv" @change="handleCSVUpload" :class="[themeClasses.input, 'w-full']" />
+              <input 
+                type="file" 
+                accept=".csv" 
+                @change="handleCSVUpload" 
+                :disabled="isUploading"
+                :class="[themeClasses.input, 'w-full disabled:opacity-50 disabled:cursor-not-allowed']" 
+              />
+              <div v-if="isUploading" :class="[themeClasses.textPrimary, 'text-sm mt-2 flex items-center gap-2']">
+                <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Uploading and processing CSV...
+              </div>
               <p :class="[themeClasses.muted, 'text-xs mt-2']">Format: <code>recitalist_name,guest_count</code> (one per line)</p>
             </div>
             <div class="flex justify-end gap-2 pt-2">
               <button
                 type="button"
                 @click="closeModal"
-                :class="[themeClasses.buttonSecondary, 'px-4 py-2 rounded transition-colors']"
+                :disabled="isUploading"
+                :class="[themeClasses.buttonSecondary, 'px-4 py-2 rounded transition-colors disabled:opacity-50']"
               >Close</button>
             </div>
           </form>
@@ -915,6 +1173,288 @@ const { themeClasses } = useTheme()
         </div>
       </div>
     </div>
+
+    <!-- Edit Modal -->
+    <transition name="fade">
+      <div v-if="showEditModal" :class="['fixed inset-0 flex items-center justify-center z-50 p-4', themeClasses.overlay]">
+        <div :class="[themeClasses.card, 'rounded-xl max-w-2xl w-full shadow-2xl border relative max-h-[90vh] overflow-auto']" @click.stop>
+          <!-- Modal Header -->
+          <div :class="['flex items-center justify-between p-6 border-b', themeClasses.cardBorder]">
+            <h3 :class="[themeClasses.textPrimary, 'text-lg font-semibold']">
+              Edit Tickets - {{ editingGroup?.recitalist.name }}
+            </h3>
+            <button @click="closeEditModal" :class="[themeClasses.textMuted, 'hover:text-red-400 transition-colors duration-200']">
+              <XMarkIcon class="w-6 h-6" />
+            </button>
+          </div>
+
+          <!-- Modal Body -->
+          <div class="p-6 space-y-6">
+            <!-- Edit Recitalist Name -->
+            <div>
+              <label :class="[themeClasses.textSecondary, 'block text-sm font-medium mb-2']">Recitalist Name</label>
+              <div class="flex gap-2">
+                <input 
+                  v-model="editForm.recitalist_name" 
+                  :class="[themeClasses.input, 'flex-1 px-3 py-2 rounded-lg text-sm']"
+                  placeholder="Enter recitalist name"
+                />
+                <button
+                  @click="updateRecitalistName"
+                  :class="[
+                    'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+                    themeClasses.buttonPrimary
+                  ]"
+                >
+                  Update Name
+                </button>
+              </div>
+            </div>
+
+            <!-- Guest Tickets Management -->
+            <div>
+              <div class="flex items-center justify-between mb-3">
+                <label :class="[themeClasses.textSecondary, 'text-sm font-medium']">
+                  Guest Tickets ({{ editForm.guest_tickets.length }})
+                </label>
+                <div class="flex items-center gap-2">
+                  <input 
+                    v-model.number="newGuestCount"
+                    type="number"
+                    min="0"
+                    max="10"
+                    :class="[themeClasses.input, 'w-20 px-2 py-1 rounded text-sm']"
+                    placeholder="0"
+                  />
+                  <button
+                    @click="addGuestTickets"
+                    :disabled="newGuestCount <= 0"
+                    :class="[
+                      'px-3 py-1 text-sm font-medium rounded transition-colors disabled:opacity-50',
+                      themeClasses.buttonSuccess
+                    ]"
+                  >
+                    Add Guests
+                  </button>
+                </div>
+              </div>
+
+              <!-- Guest Tickets List -->
+              <div v-if="editForm.guest_tickets.length > 0" class="space-y-2 max-h-60 overflow-y-auto">
+                <div 
+                  v-for="guest in editForm.guest_tickets" 
+                  :key="guest.id"
+                  :class="[
+                    themeClasses.card, 
+                    'p-3 rounded-lg border flex items-center justify-between'
+                  ]"
+                >
+                  <div class="flex items-center gap-3">
+                    <div :class="[
+                      'w-2 h-2 rounded-full',
+                      guest.status === 'unclaimed' ? 'bg-gray-400' :
+                      guest.status === 'claimed' ? 'bg-yellow-400' : 'bg-green-400'
+                    ]"></div>
+                    <div>
+                      <div :class="[themeClasses.textPrimary, 'text-sm font-medium']">Guest Ticket</div>
+                      <div :class="[themeClasses.textMuted, 'text-xs']">
+                        ID: {{ guest.id }} • Status: {{ guest.status }}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    @click="deleteGuestTicket(guest)"
+                    :disabled="guest.status !== 'unclaimed'"
+                    :class="[
+                      'px-2 py-1 text-xs font-medium rounded transition-colors',
+                      guest.status !== 'unclaimed' 
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                        : 'bg-red-500 hover:bg-red-600 text-white'
+                    ]"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+              <div v-else :class="[themeClasses.textMuted, 'text-sm text-center py-4 italic']">
+                No guest tickets
+              </div>
+            </div>
+
+            <!-- Status Information -->
+            <div :class="[themeClasses.card, 'p-4 rounded-lg border bg-blue-50 dark:bg-blue-900/20']">
+              <div :class="[themeClasses.textPrimary, 'text-sm font-medium mb-2']">Quick Info:</div>
+              <ul :class="[themeClasses.textMuted, 'text-xs space-y-1']">
+                <li>• Only unclaimed tickets can be deleted</li>
+                <li>• Guest tickets will inherit the updated recitalist name</li>
+                <li>• Changes are saved immediately when you click the action buttons</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Modal Footer -->
+          <div :class="['flex justify-end gap-3 p-6 border-t', themeClasses.cardBorder]">
+            <button
+              @click="closeEditModal"
+              :class="[
+                'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+                themeClasses.buttonSecondary
+              ]"
+            >
+              Close
+            </button>
+            <button
+              @click="saveChanges"
+              :class="[
+                'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+                themeClasses.buttonPrimary
+              ]"
+            >
+              Refresh & Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <!-- Delete Confirmation Modal -->
+    <transition name="fade">
+      <div v-if="showDeleteModal" :class="['fixed inset-0 flex items-center justify-center z-50 p-4', themeClasses.overlay]">
+        <div :class="[themeClasses.card, 'rounded-xl max-w-md w-full shadow-2xl border relative']" @click.stop>
+          <!-- Modal Header -->
+          <div :class="['flex items-center justify-between p-6 border-b', themeClasses.cardBorder]">
+            <div class="flex items-center gap-3">
+              <div class="p-2 rounded-full bg-red-100 dark:bg-red-900/30">
+                <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <h3 :class="[themeClasses.textPrimary, 'text-lg font-semibold']">Delete Recitalist</h3>
+            </div>
+            <button @click="closeDeleteModal" :class="[themeClasses.textMuted, 'hover:text-red-400 transition-colors duration-200']">
+              <XMarkIcon class="w-6 h-6" />
+            </button>
+          </div>
+
+          <!-- Modal Body -->
+          <div class="p-6 space-y-4">
+            <div v-if="groupToDelete" class="space-y-4">
+              <!-- Warning Message -->
+              <div :class="['p-4 rounded-lg border-l-4 border-red-500', 'bg-red-50 dark:bg-red-900/20']">
+                <div class="flex items-center gap-2 mb-2">
+                  <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 18.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  <span :class="['font-semibold text-red-800 dark:text-red-200']">Warning: This action cannot be undone!</span>
+                </div>
+                <p :class="['text-sm text-red-700 dark:text-red-300']">
+                  All tickets and their associated data will be permanently deleted.
+                </p>
+              </div>
+
+              <!-- Deletion Details -->
+              <div :class="[themeClasses.card, 'p-4 rounded-lg border space-y-3']">
+                <h4 :class="[themeClasses.textPrimary, 'font-semibold text-base']">You are about to delete:</h4>
+                
+                <!-- Recitalist Info -->
+                <div class="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <div>
+                    <div :class="[themeClasses.textPrimary, 'font-medium']">{{ groupToDelete.recitalist.name }}</div>
+                    <div :class="[themeClasses.textMuted, 'text-sm']">Recitalist Ticket</div>
+                  </div>
+                  <div class="ml-auto">
+                    <span :class="[
+                      'px-2 py-1 rounded-full text-xs font-medium',
+                      groupToDelete.recitalist.status === 'unclaimed' ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' :
+                      groupToDelete.recitalist.status === 'claimed' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                      'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                    ]">
+                      {{ groupToDelete.recitalist.status }}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Guest Tickets Info -->
+                <div v-if="groupToDelete.guests.length > 0" class="space-y-2">
+                  <div :class="[themeClasses.textSecondary, 'text-sm font-medium']">
+                    {{ groupToDelete.guests.length }} Guest Ticket{{ groupToDelete.guests.length !== 1 ? 's' : '' }}:
+                  </div>
+                  <div class="max-h-32 overflow-y-auto space-y-1">
+                    <div 
+                      v-for="guest in groupToDelete.guests" 
+                      :key="guest.id"
+                      class="flex items-center gap-3 p-2 bg-green-50 dark:bg-green-900/20 rounded"
+                    >
+                      <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <div class="flex-1">
+                        <div :class="[themeClasses.textMuted, 'text-sm']">Guest Ticket</div>
+                      </div>
+                      <span :class="[
+                        'px-2 py-1 rounded-full text-xs font-medium',
+                        guest.status === 'unclaimed' ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' :
+                        guest.status === 'claimed' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                        'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                      ]">
+                        {{ guest.status }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Summary -->
+                <div :class="['p-3 rounded-lg border-2 border-red-200 dark:border-red-800', 'bg-red-50 dark:bg-red-900/20']">
+                  <div :class="['text-center font-semibold', 'text-red-800 dark:text-red-200']">
+                    Total: {{ 1 + groupToDelete.guests.length }} ticket{{ (1 + groupToDelete.guests.length) !== 1 ? 's' : '' }} will be deleted
+                  </div>
+                </div>
+              </div>
+
+              <!-- Confirmation Input -->
+              <div>
+                <label :class="[themeClasses.textSecondary, 'block text-sm font-medium mb-2']">
+                  Type "DELETE" to confirm this action:
+                </label>
+                <input 
+                  v-model="deleteConfirmText"
+                  type="text"
+                  placeholder="Type DELETE here"
+                  :class="[
+                    themeClasses.input, 
+                    'w-full px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent'
+                  ]"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Modal Footer -->
+          <div :class="['flex justify-end gap-3 p-6 border-t', themeClasses.cardBorder]">
+            <button
+              @click="closeDeleteModal"
+              :class="[
+                'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+                themeClasses.buttonSecondary
+              ]"
+            >
+              Cancel
+            </button>
+            <button
+              @click="confirmDeleteRecitalist"
+              :disabled="deleteConfirmText !== 'DELETE'"
+              :class="[
+                'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+                'disabled:opacity-50 disabled:cursor-not-allowed',
+                'bg-red-600 hover:bg-red-700 text-white',
+                'disabled:bg-gray-400 disabled:hover:bg-gray-400'
+              ]"
+            >
+              Delete Permanently
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
