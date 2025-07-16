@@ -16,7 +16,8 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   UserCircleIcon,
-  CalendarDaysIcon
+  CalendarDaysIcon,
+  WrenchScrewdriverIcon
 } from '@heroicons/vue/24/outline'
 
 // Props and emits
@@ -88,6 +89,11 @@ const adminItems = computed(() => {
       name: 'Reports',
       path: '/admin/reports',
       icon: ChartBarIcon
+    },
+    {
+      name: 'Maintenance',
+      path: '/admin/maintenance',
+      icon: WrenchScrewdriverIcon
     }
   ]
 })

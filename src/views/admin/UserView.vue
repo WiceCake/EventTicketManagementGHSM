@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { supabase } from '../../lib/supabase'
+import { apiService } from '../../lib/api'
 import { useTheme } from '../../composables/useTheme'
 
 const { themeClasses } = useTheme()
@@ -19,6 +20,7 @@ const form = ref({
   full_name: '',
   role: 'staff',
   is_active: true,
+  password: '', // Add password field
 })
 
 const toast = ref({ show: false, message: '', success: true })
@@ -30,6 +32,7 @@ function resetForm() {
     full_name: '',
     role: 'staff',
     is_active: true,
+    password: '', // Add password field
   }
   editingUserId.value = null
 }
@@ -82,44 +85,40 @@ function showToast(message, success = true) {
 }
 
 async function createUser() {
-  const { error: err } = await supabase
-    .from('users')
-    .insert({
+  try {
+    // Use the API service to create the user
+    const response = await apiService.createUser({
       email: form.value.email,
-      username: form.value.username,
-      full_name: form.value.full_name,
+      password: form.value.password,
+      name: form.value.full_name,
       role: form.value.role,
-      is_active: form.value.is_active,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     })
-  if (err) {
-    showToast(err.message, false)
-  } else {
-    showToast('User created!', true)
+    
+    console.log('User created successfully:', response)
+    showToast('User created successfully!', true)
     closeModal()
     await fetchUsers()
+  } catch (error) {
+    console.error('Error creating user:', error)
+    showToast(`Error: ${error.message}`, false)
   }
 }
 
 async function saveUser() {
-  const { error: err } = await supabase
-    .from('users')
-    .update({
+  try {
+    const response = await apiService.updateUser(editingUserId.value, {
       email: form.value.email,
-      username: form.value.username,
-      full_name: form.value.full_name,
+      name: form.value.full_name,
       role: form.value.role,
-      is_active: form.value.is_active,
-      updated_at: new Date().toISOString(),
     })
-    .eq('id', editingUserId.value)
-  if (err) {
-    showToast(err.message, false)
-  } else {
-    showToast('User updated!', true)
+    
+    console.log('User updated successfully:', response)
+    showToast('User updated successfully!', true)
     closeModal()
     await fetchUsers()
+  } catch (error) {
+    console.error('Error updating user:', error)
+    showToast(`Error: ${error.message}`, false)
   }
 }
 
@@ -334,6 +333,22 @@ onMounted(fetchUsers)
                   themeClasses.inputBorder,
                   'focus:ring-2 focus:ring-blue-500/30'
                 ]" 
+              />
+            </div>
+            <div v-if="!isEditing">
+              <label :class="['block text-sm font-medium mb-1', themeClasses.text]">Password</label>
+              <input 
+                v-model="form.password" 
+                type="password"
+                required 
+                minlength="6"
+                :class="[
+                  'w-full px-3 py-2 border rounded transition-colors duration-200',
+                  themeClasses.input,
+                  themeClasses.inputBorder,
+                  'focus:ring-2 focus:ring-blue-500/30'
+                ]" 
+                placeholder="Minimum 6 characters"
               />
             </div>
             <div>

@@ -3,12 +3,21 @@ import { ref, computed, provide, watch, onMounted, onUnmounted } from "vue";
 import { Squares2X2Icon } from "@heroicons/vue/24/solid";
 import { useRoute } from "vue-router";
 import SideBar from "./components/SideBar.vue";
+import MaintenanceMode from "./components/MaintenanceMode.vue";
 import { useAuth } from './composables/useAuth'
 import { useTheme } from './composables/useTheme'
+import { useMaintenanceMode } from './composables/useMaintenanceMode'
 
 const route = useRoute();
 const { user, loading, isAuthenticated, error } = useAuth()
 const { themeClasses, initTheme } = useTheme()
+const { 
+  isMaintenanceMode, 
+  maintenanceConfig, 
+  hasAdminAccess, 
+  disableMaintenanceMode, 
+  initializeMaintenanceMode 
+} = useMaintenanceMode()
 
 // Sidebar state management
 const sidebarCollapsed = ref(false);
@@ -16,6 +25,11 @@ const isMobile = ref(false);
 const showSidebar = computed(() => {
   // Check if current route should show sidebar
   return route.meta?.sidebar !== false;
+});
+
+// Check if we should show the app or maintenance mode
+const showMaintenanceMode = computed(() => {
+  return isMaintenanceMode.value && !hasAdminAccess.value;
 });
 
 // Provide sidebar state to child components
@@ -32,6 +46,12 @@ const checkScreenSize = () => {
   if (isMobile.value) {
     sidebarCollapsed.value = true;
   }
+};
+
+// Handle admin access during maintenance
+const handleAdminAccess = () => {
+  // Grant admin access so they can bypass maintenance mode
+  grantAdminAccess();
 };
 
 // Watch for route changes to handle sidebar state
@@ -54,6 +74,8 @@ onMounted(() => {
   window.addEventListener("resize", checkScreenSize);
   // Initialize theme system
   const cleanupTheme = initTheme();
+  // Initialize maintenance mode
+  initializeMaintenanceMode();
   
   // Store cleanup function for unmount
   onUnmounted(() => {
@@ -65,79 +87,88 @@ onMounted(() => {
 
 <template>
   <div :class="['app-container min-h-screen', themeClasses.pageBackground]">
-    <!-- Fixed Sidebar -->
-    <aside v-show="showSidebar">
-      <SideBar @toggleSidebar="toggleSidebar" />
-    </aside>
+    <!-- Maintenance Mode -->
+    <MaintenanceMode 
+      v-if="isMaintenanceMode && !isAdminAccessGranted"
+      @admin-access="handleAdminAccess"
+    />
+    
+    <!-- Normal App -->
+    <div v-else>
+      <!-- Fixed Sidebar -->
+      <aside v-show="showSidebar">
+        <SideBar @toggleSidebar="toggleSidebar" />
+      </aside>
 
-    <!-- Mobile Backdrop - only show when sidebar is open on mobile -->
-    <div
-      v-if="showSidebar && !sidebarCollapsed && isMobile"
-      class="fixed inset-0 bg-black bg-opacity-50 z-20"
-      @click="toggleSidebar"
-    ></div>
+      <!-- Mobile Backdrop - only show when sidebar is open on mobile -->
+      <div
+        v-if="showSidebar && !sidebarCollapsed && isMobile"
+        class="fixed inset-0 bg-black bg-opacity-50 z-20"
+        @click="toggleSidebar"
+      ></div>
 
-    <!-- Main Content with Dynamic Margin -->
-    <main
-      class="transition-all duration-300 ease-in-out"
-      :class="{
-        // When sidebar is hidden (login page)
-        '': !showSidebar,
-        // When sidebar is shown
-        'ml-64': showSidebar && !sidebarCollapsed,
-        'ml-20': showSidebar && sidebarCollapsed,
-        // Mobile - no margin when sidebar is present
-        'md:ml-64': showSidebar && !sidebarCollapsed,
-        'md:ml-20': showSidebar && sidebarCollapsed
-      }"
-    >
-      <!-- Mobile Header - only show when sidebar is enabled -->
-      <header
-        v-if="showSidebar"
-        :class="[
-          'md:hidden border-b px-4 py-3 flex items-center justify-between',
-          themeClasses.sidebarBackground
-        ]"
+      <!-- Main Content with Dynamic Margin -->
+      <main
+        class="transition-all duration-300 ease-in-out"
+        :class="{
+          // When sidebar is hidden (login page)
+          '': !showSidebar,
+          // When sidebar is shown
+          'ml-64': showSidebar && !sidebarCollapsed,
+          'ml-20': showSidebar && sidebarCollapsed,
+          // Mobile - no margin when sidebar is present
+          'md:ml-64': showSidebar && !sidebarCollapsed,
+          'md:ml-20': showSidebar && sidebarCollapsed
+        }"
       >
-        <h1 :class="['text-lg font-semibold', themeClasses.textPrimary]">GHSM</h1>
-        <button
-          @click="toggleSidebar"
+        <!-- Mobile Header - only show when sidebar is enabled -->
+        <header
+          v-if="showSidebar"
           :class="[
-            'p-2 rounded-md transition-colors duration-200',
-            themeClasses.navItem
+            'md:hidden border-b px-4 py-3 flex items-center justify-between',
+            themeClasses.sidebarBackground
           ]"
         >
-          <!-- Hamburger Menu Icon -->
-          <svg
-            class="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+          <h1 :class="['text-lg font-semibold', themeClasses.textPrimary]">GHSM</h1>
+          <button
+            @click="toggleSidebar"
+            :class="[
+              'p-2 rounded-md transition-colors duration-200',
+              themeClasses.navItem
+            ]"
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M4 6h16M4 12h16M4 18h16"
-            ></path>
-          </svg>
-        </button>
-      </header>
+            <!-- Hamburger Menu Icon -->
+            <svg
+              class="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 6h16M4 12h16M4 18h16"
+              ></path>
+            </svg>
+          </button>
+        </header>
 
-      <!-- Show loading state -->
-      <div v-if="loading" :class="['loading', themeClasses.textPrimary]">
-        Initializing authentication...
-      </div>
-      <div v-else-if="error" :class="['text-red-500']">Auth error: {{ error.message }}</div>
-      
-      <!-- Router View -->
-      <div
-        v-else
-        class="min-h-screen"
-      >
-        <RouterView />
-      </div>
-    </main>
+        <!-- Show loading state -->
+        <div v-if="loading" :class="['loading', themeClasses.textPrimary]">
+          Initializing authentication...
+        </div>
+        <div v-else-if="error" :class="['text-red-500']">Auth error: {{ error.message }}</div>
+        
+        <!-- Router View -->
+        <div
+          v-else
+          class="min-h-screen"
+        >
+          <RouterView />
+        </div>
+      </main>
+    </div>
   </div>
 </template>
 
