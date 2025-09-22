@@ -233,6 +233,7 @@ async function saveUser() {
   
   try {
     const response = await adminService.updateUser(editingUserId.value, {
+      email: form.value.email,
       username: form.value.username,
       full_name: form.value.full_name,
       role: form.value.role,

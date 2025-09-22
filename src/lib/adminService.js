@@ -149,6 +149,7 @@ class AdminService {
       const { data: dbUser, error: dbError } = await this.supabase
         .from('users')
         .update({
+          email: userData.email,
           username: userData.username,
           full_name: userData.full_name,
           role: userData.role,
@@ -163,18 +164,21 @@ class AdminService {
         throw new Error(`Failed to update database user: ${dbError.message}`);
       }
 
-      // Update auth user metadata
-      const { data: authUser, error: authError } = await this.supabase.auth.admin.updateUserById(userId, {
+      // Update auth user (email and metadata)
+      const authUpdateData = {
+        email: userData.email,
         user_metadata: {
           full_name: userData.full_name,
           role: userData.role
         }
-      });
+      };
+
+      const { data: authUser, error: authError } = await this.supabase.auth.admin.updateUserById(userId, authUpdateData);
 
       if (authError) {
         console.error('Auth update error:', authError);
         // Database was updated, but we should still report the issue
-        console.warn('Database updated but auth metadata update failed:', authError.message);
+        console.warn('Database updated but auth update failed:', authError.message);
       }
 
       return {
