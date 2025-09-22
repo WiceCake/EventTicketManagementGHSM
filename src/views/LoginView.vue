@@ -33,26 +33,14 @@ const password = ref('');
 const error = ref('');
 const isSubmitting = ref(false);
 
-// Password reset state
-const showResetModal = ref(false);
-const resetEmail = ref('');
-const resetLoading = ref(false);
-const resetMessage = ref('');
-
-// Direct password reset state (temporary, for development)
-const showDirectResetModal = ref(false);
-const directResetEmail = ref('');
-const directNewPassword = ref('');
-const directConfirmPassword = ref('');
-const directResetLoading = ref(false);
-const directResetMessage = ref('');
-
 const showToast = (message, type = 'error') => {
+  console.log('showToast called:', message, type); // Debug log
   toast.value = { show: true, message, type };
   if (toastTimeout) clearTimeout(toastTimeout);
   toastTimeout = setTimeout(() => {
+    console.log('hiding toast'); // Debug log
     toast.value.show = false;
-  }, 3000);
+  }, 5000);
 };
 
 const handlelogin = async () => {
@@ -180,9 +168,11 @@ onMounted(() => {
 <template>
   <div :class="['flex items-center justify-center min-h-screen', themeClasses.pageBackground]">
     <div :class="['flex flex-col items-center gap-5 shadow-lg p-10 rounded-lg max-w-md w-full mx-4', themeClasses.cardBackground, themeClasses.cardBorder]">      <img class="w-16 h-16" :src="logoSrc" alt="GREY Harmonics Logo" />
-      <h1 :class="['text-2xl font-bold', themeClasses.textPrimary]">Sign In</h1><!-- Toast Message (single source of error feedback) -->
+      <h1 :class="['text-2xl font-bold', themeClasses.textPrimary]">Sign In</h1>
+      
+      <!-- Toast Message -->
       <transition name="fade">
-        <div v-if="toast.show" :class="['fixed top-6 left-1/2 z-50 transform -translate-x-1/2 px-6 py-3 rounded shadow-lg', toast.type === 'error' ? themeClasses.statusError : themeClasses.statusSuccess]">
+        <div v-if="toast.show" :class="['fixed top-6 left-1/2 z-[9999] transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-2xl border-2 font-semibold', toast.type === 'error' ? 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900 dark:text-red-200 dark:border-red-700' : 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900 dark:text-green-200 dark:border-green-700']">
           {{ toast.message }}
         </div>
       </transition>
@@ -263,7 +253,9 @@ onMounted(() => {
           </span>
           <span v-else>Sign In</span>
         </button>
-      </form>      <!-- Footer -->
+      </form>
+      
+      <!-- Footer -->
       <p :class="['text-xs text-center mt-4', themeClasses.textMuted]">
         &copy; 2025 Grey Harmonics School of Music
       </p>
@@ -272,6 +264,16 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

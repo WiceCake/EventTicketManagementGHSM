@@ -88,13 +88,13 @@ onMounted(() => {
 <template>
   <div :class="['app-container min-h-screen', themeClasses.pageBackground]">
     <!-- Maintenance Mode -->
-    <MaintenanceMode 
+    <!-- <MaintenanceMode 
       v-if="isMaintenanceMode && !isAdminAccessGranted"
       @admin-access="handleAdminAccess"
-    />
+    /> -->
     
     <!-- Normal App -->
-    <div v-else>
+    <div>
       <!-- Fixed Sidebar -->
       <aside v-show="showSidebar">
         <SideBar @toggleSidebar="toggleSidebar" />
