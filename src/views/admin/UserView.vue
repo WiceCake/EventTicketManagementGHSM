@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 import { supabase } from '../../lib/supabase'
-import { apiService } from '../../lib/api'
+import { adminService } from '../../lib/adminService'
 import { useTheme } from '../../composables/useTheme'
 import { useAuth } from '../../composables/useAuth'
 
@@ -31,6 +31,7 @@ const toast = ref({ show: false, message: '', success: true })
 const showResetModal = ref(false)
 const resetUserEmail = ref('')
 const resetUserName = ref('')
+const resetUserId = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
 const resetLoading = ref(false)
@@ -87,6 +88,7 @@ function closeModal() {
 function openResetPasswordModal(user) {
   resetUserEmail.value = user.email
   resetUserName.value = user.username || user.email
+  resetUserId.value = user.id
   newPassword.value = ''
   confirmPassword.value = ''
   showResetModal.value = true
@@ -96,6 +98,7 @@ function closeResetModal() {
   showResetModal.value = false
   resetUserEmail.value = ''
   resetUserName.value = ''
+  resetUserId.value = ''
   newPassword.value = ''
   confirmPassword.value = ''
 }
@@ -115,39 +118,16 @@ async function resetUserPassword() {
   resetLoading.value = true
   
   try {
-    // Call backend API to reset password
-    const response = await fetch('http://localhost:3001/dev-reset-password', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        email: resetUserEmail.value,
-        newPassword: newPassword.value,
-        token: `admin-reset-${Date.now()}-${resetUserEmail.value}`
-      })
-    })
+    // Use admin service to update password
+    const response = await adminService.updateUserPassword(resetUserId.value, newPassword.value)
     
-    let result
-    try {
-      result = await response.json()
-    } catch (parseError) {
-      console.error('Failed to parse response:', parseError)
-      showToast('Server returned invalid response', false)
-      return
-    }
-    
-    if (!response.ok) {
-      showToast(result.error || `Server error: ${response.status}`, false)
-      return
-    }
-    
+    console.log('Password reset successful:', response)
     showToast(`Password reset successfully for ${resetUserName.value}!`, true)
     closeResetModal()
     
   } catch (error) {
     console.error('Reset password error:', error)
-    showToast('Failed to connect to server. Make sure the backend is running.', false)
+    showToast(`Error: ${error.message}`, false)
   } finally {
     resetLoading.value = false
   }
@@ -183,8 +163,8 @@ async function deleteUser() {
   deleteLoading.value = true
   
   try {
-    // Use the API service to delete the user
-    const response = await apiService.deleteUser(deleteUserData.value.id)
+    // Use the admin service to delete the user
+    const response = await adminService.deleteUser(deleteUserData.value.id)
     
     console.log('User deleted successfully:', response)
     showToast(`User ${deleteUserData.value.username || deleteUserData.value.email} deleted successfully!`, true)
@@ -226,11 +206,11 @@ async function createUser() {
   createLoading.value = true
   
   try {
-    // Use the API service to create the user
-    const response = await apiService.createUser({
+    // Use the admin service to create the user
+    const response = await adminService.createUser({
       email: form.value.email,
       password: form.value.password,
-      name: form.value.full_name,
+      full_name: form.value.full_name,
       role: form.value.role,
     })
     
