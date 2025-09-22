@@ -3,21 +3,12 @@ import { ref, computed, provide, watch, onMounted, onUnmounted } from "vue";
 import { Squares2X2Icon } from "@heroicons/vue/24/solid";
 import { useRoute } from "vue-router";
 import SideBar from "./components/SideBar.vue";
-import MaintenanceMode from "./components/MaintenanceMode.vue";
 import { useAuth } from './composables/useAuth'
 import { useTheme } from './composables/useTheme'
-import { useMaintenanceMode } from './composables/useMaintenanceMode'
 
 const route = useRoute();
 const { user, loading, isAuthenticated, error } = useAuth()
 const { themeClasses, initTheme } = useTheme()
-const { 
-  isMaintenanceMode, 
-  maintenanceConfig, 
-  hasAdminAccess, 
-  disableMaintenanceMode, 
-  initializeMaintenanceMode 
-} = useMaintenanceMode()
 
 // Sidebar state management
 const sidebarCollapsed = ref(false);
@@ -25,11 +16,6 @@ const isMobile = ref(false);
 const showSidebar = computed(() => {
   // Check if current route should show sidebar
   return route.meta?.sidebar !== false;
-});
-
-// Check if we should show the app or maintenance mode
-const showMaintenanceMode = computed(() => {
-  return isMaintenanceMode.value && !hasAdminAccess.value;
 });
 
 // Provide sidebar state to child components
@@ -46,12 +32,6 @@ const checkScreenSize = () => {
   if (isMobile.value) {
     sidebarCollapsed.value = true;
   }
-};
-
-// Handle admin access during maintenance
-const handleAdminAccess = () => {
-  // Grant admin access so they can bypass maintenance mode
-  grantAdminAccess();
 };
 
 // Watch for route changes to handle sidebar state
@@ -74,8 +54,6 @@ onMounted(() => {
   window.addEventListener("resize", checkScreenSize);
   // Initialize theme system
   const cleanupTheme = initTheme();
-  // Initialize maintenance mode
-  initializeMaintenanceMode();
   
   // Store cleanup function for unmount
   onUnmounted(() => {
@@ -87,12 +65,6 @@ onMounted(() => {
 
 <template>
   <div :class="['app-container min-h-screen', themeClasses.pageBackground]">
-    <!-- Maintenance Mode -->
-    <!-- <MaintenanceMode 
-      v-if="isMaintenanceMode && !isAdminAccessGranted"
-      @admin-access="handleAdminAccess"
-    /> -->
-    
     <!-- Normal App -->
     <div>
       <!-- Fixed Sidebar -->
