@@ -74,6 +74,7 @@ function openEditModal(user) {
     full_name: user.full_name,
     role: user.role,
     is_active: user.is_active,
+    password: '', // Don't populate existing password
   }
   editingUserId.value = user.id
   isEditing.value = true
@@ -231,9 +232,9 @@ async function saveUser() {
   createLoading.value = true
   
   try {
-    const response = await apiService.updateUser(editingUserId.value, {
-      email: form.value.email,
-      name: form.value.full_name,
+    const response = await adminService.updateUser(editingUserId.value, {
+      username: form.value.username,
+      full_name: form.value.full_name,
       role: form.value.role,
     })
     
