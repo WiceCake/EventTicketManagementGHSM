@@ -209,6 +209,7 @@ async function createUser() {
     // Use the admin service to create the user
     const response = await adminService.createUser({
       email: form.value.email,
+      username: form.value.username,
       password: form.value.password,
       full_name: form.value.full_name,
       role: form.value.role,

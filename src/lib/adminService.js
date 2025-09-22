@@ -45,6 +45,7 @@ class AdminService {
         .insert({
           id: authUser.user.id,
           email: userData.email,
+          username: userData.username,
           full_name: userData.full_name,
           role: userData.role || 'user',
           created_at: new Date().toISOString(),
@@ -65,6 +66,7 @@ class AdminService {
         user: {
           id: authUser.user.id,
           email: authUser.user.email,
+          username: userData.username,
           full_name: userData.full_name,
           role: userData.role || 'user'
         }
@@ -147,6 +149,7 @@ class AdminService {
       const { data: dbUser, error: dbError } = await this.supabase
         .from('users')
         .update({
+          username: userData.username,
           full_name: userData.full_name,
           role: userData.role,
           updated_at: new Date().toISOString()
